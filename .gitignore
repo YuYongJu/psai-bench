@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.egg-info/
+dist/
+*.pyc
+
+# Data (too large for git, downloaded via CLI)
+data/raw/
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/

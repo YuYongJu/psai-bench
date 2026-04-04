@@ -1,0 +1,198 @@
+{
+  "random": {
+    "tdr": 0.6557846506300115,
+    "fasr": 0.30726256983240224,
+    "accuracy": 0.326,
+    "safety_score_1_1": 0.4815236102312068,
+    "safety_score_3_1": 0.5686541304306092,
+    "safety_score_10_1": 0.6241008251029561,
+    "ece": 0.17745333333333335,
+    "brier_score": 0.2612641333333333,
+    "overconfidence_rate": 0.0,
+    "suspicious_fraction": 0.32366666666666666,
+    "suspicious_penalty": 0.04733333333333334,
+    "calibration_factor": 0.8225466666666666,
+    "aggregate_score": 0.4456046503235914,
+    "accuracy_easy": 0.31773399014778325,
+    "accuracy_medium": 0.3347547974413646,
+    "accuracy_hard": 0.3281990521327014,
+    "safety_score_easy": 0.5743256026174631,
+    "safety_score_medium": 0.4845415778251599,
+    "safety_score_hard": 0.5049019607843137,
+    "per_dataset_accuracy": {
+      "ucf_crime": 0.326
+    },
+    "generalization_gap": 0.0,
+    "confusion_matrix": {
+      "THREAT": {
+        "THREAT": 584,
+        "SUSPICIOUS": 561,
+        "BENIGN": 601
+      },
+      "SUSPICIOUS": {
+        "THREAT": 187,
+        "SUSPICIOUS": 174,
+        "BENIGN": 177
+      },
+      "BENIGN": {
+        "THREAT": 260,
+        "SUSPICIOUS": 236,
+        "BENIGN": 220
+      }
+    },
+    "n_scenarios": 3000,
+    "n_threats": 1746,
+    "n_benign": 716,
+    "n_suspicious_gt": 538,
+    "mean_latency_ms": 1.0,
+    "p95_latency_ms": 1.0,
+    "mean_cost_usd": 0.0
+  },
+  "majority_class": {
+    "tdr": 1.0,
+    "fasr": 0.0,
+    "accuracy": 0.582,
+    "safety_score_1_1": 0.5,
+    "safety_score_3_1": 0.75,
+    "safety_score_10_1": 0.9090909090909091,
+    "ece": 0.40800000000000003,
+    "brier_score": 0.4097400000000001,
+    "overconfidence_rate": 1.0,
+    "suspicious_fraction": 0.0,
+    "suspicious_penalty": 0.0,
+    "calibration_factor": 0.592,
+    "aggregate_score": 0.44399999999999995,
+    "accuracy_easy": 0.4121510673234811,
+    "accuracy_medium": 1.0,
+    "accuracy_hard": 0.36255924170616116,
+    "safety_score_easy": 0.75,
+    "safety_score_medium": 0.75,
+    "safety_score_hard": 0.75,
+    "per_dataset_accuracy": {
+      "ucf_crime": 0.582
+    },
+    "generalization_gap": 0.0,
+    "confusion_matrix": {
+      "THREAT": {
+        "THREAT": 1746,
+        "SUSPICIOUS": 0,
+        "BENIGN": 0
+      },
+      "SUSPICIOUS": {
+        "THREAT": 538,
+        "SUSPICIOUS": 0,
+        "BENIGN": 0
+      },
+      "BENIGN": {
+        "THREAT": 716,
+        "SUSPICIOUS": 0,
+        "BENIGN": 0
+      }
+    },
+    "n_scenarios": 3000,
+    "n_threats": 1746,
+    "n_benign": 716,
+    "n_suspicious_gt": 538,
+    "mean_latency_ms": 1.0,
+    "p95_latency_ms": 1.0,
+    "mean_cost_usd": 0.0
+  },
+  "always_suspicious": {
+    "tdr": 1.0,
+    "fasr": 0.0,
+    "accuracy": 0.17933333333333334,
+    "safety_score_1_1": 0.5,
+    "safety_score_3_1": 0.75,
+    "safety_score_10_1": 0.9090909090909091,
+    "ece": 0.32066666666666666,
+    "brier_score": 0.25,
+    "overconfidence_rate": 0.0,
+    "suspicious_fraction": 1.0,
+    "suspicious_penalty": 1.4,
+    "calibration_factor": 0.6793333333333333,
+    "aggregate_score": -0.20379999999999995,
+    "accuracy_easy": 0.0,
+    "accuracy_medium": 0.0,
+    "accuracy_hard": 0.6374407582938388,
+    "safety_score_easy": 0.75,
+    "safety_score_medium": 0.75,
+    "safety_score_hard": 0.75,
+    "per_dataset_accuracy": {
+      "ucf_crime": 0.17933333333333334
+    },
+    "generalization_gap": 0.0,
+    "confusion_matrix": {
+      "THREAT": {
+        "THREAT": 0,
+        "SUSPICIOUS": 1746,
+        "BENIGN": 0
+      },
+      "SUSPICIOUS": {
+        "THREAT": 0,
+        "SUSPICIOUS": 538,
+        "BENIGN": 0
+      },
+      "BENIGN": {
+        "THREAT": 0,
+        "SUSPICIOUS": 716,
+        "BENIGN": 0
+      }
+    },
+    "n_scenarios": 3000,
+    "n_threats": 1746,
+    "n_benign": 716,
+    "n_suspicious_gt": 538,
+    "mean_latency_ms": 1.0,
+    "p95_latency_ms": 1.0,
+    "mean_cost_usd": 0.0
+  },
+  "severity_heuristic": {
+    "tdr": 1.0,
+    "fasr": 1.0,
+    "accuracy": 0.7623333333333333,
+    "safety_score_1_1": 1.0,
+    "safety_score_3_1": 1.0,
+    "safety_score_10_1": 1.0,
+    "ece": 0.13556666666666667,
+    "brier_score": 0.14877999999999997,
+    "overconfidence_rate": 0.11921458625525946,
+    "suspicious_fraction": 0.319,
+    "suspicious_penalty": 0.038000000000000034,
+    "calibration_factor": 0.8644333333333334,
+    "aggregate_score": 0.8315848666666666,
+    "accuracy_easy": 0.9704433497536946,
+    "accuracy_medium": 0.6236673773987207,
+    "accuracy_hard": 0.6161137440758294,
+    "safety_score_easy": 1.0,
+    "safety_score_medium": 0.75,
+    "safety_score_hard": 0.75,
+    "per_dataset_accuracy": {
+      "ucf_crime": 0.7623333333333333
+    },
+    "generalization_gap": 0.0,
+    "confusion_matrix": {
+      "THREAT": {
+        "THREAT": 1180,
+        "SUSPICIOUS": 566,
+        "BENIGN": 0
+      },
+      "SUSPICIOUS": {
+        "THREAT": 62,
+        "SUSPICIOUS": 391,
+        "BENIGN": 85
+      },
+      "BENIGN": {
+        "THREAT": 0,
+        "SUSPICIOUS": 0,
+        "BENIGN": 716
+      }
+    },
+    "n_scenarios": 3000,
+    "n_threats": 1746,
+    "n_benign": 716,
+    "n_suspicious_gt": 538,
+    "mean_latency_ms": 1.0,
+    "p95_latency_ms": 1.0,
+    "mean_cost_usd": 0.0
+  }
+}

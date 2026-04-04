@@ -1,0 +1,92 @@
+[
+  {
+    "target_suspicious_rate": 0.0,
+    "actual_suspicious_fraction": 0.245,
+    "accuracy": 0.7473333333333333,
+    "tdr": 0.8717067583046965,
+    "fasr": 0.7625698324022346,
+    "safety_score_3_1": 0.844422526829081,
+    "suspicious_penalty": 0.0,
+    "aggregate_score": 0.7287281964282287
+  },
+  {
+    "target_suspicious_rate": 0.1,
+    "actual_suspicious_fraction": 0.30366666666666664,
+    "accuracy": 0.7026666666666667,
+    "tdr": 0.8917525773195877,
+    "fasr": 0.696927374301676,
+    "safety_score_3_1": 0.8430462765651098,
+    "suspicious_penalty": 0.007333333333333303,
+    "aggregate_score": 0.7247632232687483
+  },
+  {
+    "target_suspicious_rate": 0.2,
+    "actual_suspicious_fraction": 0.389,
+    "accuracy": 0.6333333333333333,
+    "tdr": 0.9009163802978236,
+    "fasr": 0.6187150837988827,
+    "safety_score_3_1": 0.8303660561730885,
+    "suspicious_penalty": 0.17800000000000005,
+    "aggregate_score": 0.5843608617539452
+  },
+  {
+    "target_suspicious_rate": 0.3,
+    "actual_suspicious_fraction": 0.482,
+    "accuracy": 0.573,
+    "tdr": 0.9243986254295533,
+    "fasr": 0.5307262569832403,
+    "safety_score_3_1": 0.825980533317975,
+    "suspicious_penalty": 0.364,
+    "aggregate_score": 0.4536782329263377
+  },
+  {
+    "target_suspicious_rate": 0.4,
+    "actual_suspicious_fraction": 0.5386666666666666,
+    "accuracy": 0.5333333333333333,
+    "tdr": 0.9284077892325315,
+    "fasr": 0.4692737430167598,
+    "safety_score_3_1": 0.8136242776785886,
+    "suspicious_penalty": 0.4773333333333333,
+    "aggregate_score": 0.35607533889142734
+  },
+  {
+    "target_suspicious_rate": 0.5,
+    "actual_suspicious_fraction": 0.6126666666666667,
+    "accuracy": 0.457,
+    "tdr": 0.9284077892325315,
+    "fasr": 0.3547486033519553,
+    "safety_score_3_1": 0.7849929927623874,
+    "suspicious_penalty": 0.6253333333333334,
+    "aggregate_score": 0.2378973283435402
+  },
+  {
+    "target_suspicious_rate": 0.6,
+    "actual_suspicious_fraction": 0.6876666666666666,
+    "accuracy": 0.4026666666666667,
+    "tdr": 0.9438717067583047,
+    "fasr": 0.2849162011173184,
+    "safety_score_3_1": 0.779132830348058,
+    "suspicious_penalty": 0.7753333333333333,
+    "aggregate_score": 0.13132881017545822
+  },
+  {
+    "target_suspicious_rate": 0.8,
+    "actual_suspicious_fraction": 0.8473333333333334,
+    "accuracy": 0.2846666666666667,
+    "tdr": 0.9713631156930126,
+    "fasr": 0.13966480446927373,
+    "safety_score_3_1": 0.7634385378870778,
+    "suspicious_penalty": 1.094666666666667,
+    "aggregate_score": -0.04586850367305115
+  },
+  {
+    "target_suspicious_rate": 1.0,
+    "actual_suspicious_fraction": 1.0,
+    "accuracy": 0.17933333333333334,
+    "tdr": 1.0,
+    "fasr": 0.0,
+    "safety_score_3_1": 0.75,
+    "suspicious_penalty": 1.4,
+    "aggregate_score": -0.15741399999999994
+  }
+]
