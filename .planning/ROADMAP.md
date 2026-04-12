@@ -29,7 +29,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. `data/generated/` and build artifacts (*.egg-info, .coverage, .ruff_cache) are absent from `git ls-files`
   3. `git log --all --oneline` shows a history with no commits containing files over 1MB (generated JSON purged)
   4. `git status` on a fresh clone shows a clean working tree with no untracked generated data
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 01-01-PLAN.md — Fix lint errors, update .gitignore, untrack generated data
+- [ ] 01-02-PLAN.md — Rewrite git history to purge generated JSON blobs
 
 ### Phase 2: Project Metadata + Licensing
 **Goal**: The package has complete OSS identity — correct legal standing, citable authorship, and contributor tooling in place before CI runs
@@ -83,7 +86,7 @@ Phases execute strictly in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Repository Hygiene | 0/? | Not started | - |
+| 1. Repository Hygiene | 0/2 | Not started | - |
 | 2. Project Metadata + Licensing | 0/? | Not started | - |
 | 3. Test Coverage Expansion | 0/? | Not started | - |
 | 4. GitHub Actions CI | 0/? | Not started | - |
