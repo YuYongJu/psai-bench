@@ -48,3 +48,13 @@ def contradictory_scenarios_200():
     """
     from psai_bench.generators import ContradictoryGenerator
     return ContradictoryGenerator(seed=42).generate(200)
+
+
+@pytest.fixture(scope="session")
+def temporal_scenarios_50():
+    """50 temporal sequences (~150-250 alerts) for Phase 14 test suite.
+
+    Uses seed=42 for reproducibility. Generated once per session.
+    """
+    from psai_bench.generators import TemporalSequenceGenerator
+    return TemporalSequenceGenerator(seed=42).generate(50)
