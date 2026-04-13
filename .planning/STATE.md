@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: Fix the Foundation
-status: complete
-stopped_at: v2.0 milestone complete — all 26 requirements satisfied, audit passed
-last_updated: "2026-04-13T10:20:00.000Z"
+milestone: v3.0
+milestone_name: Perception-Reasoning Gap
+status: planning
+stopped_at: Milestone v3.0 started — defining requirements
+last_updated: "2026-04-13T10:30:00.000Z"
 last_activity: 2026-04-13
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 9
-  completed_plans: 9
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # State
@@ -21,12 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-13)
 
 **Core value:** Non-trivially-solvable benchmark where no single input field reveals ground truth
-**Current focus:** v2.0 complete — ready for next milestone
+**Current focus:** v3.0 — Perception-Reasoning Gap (defining requirements)
 
 ## Current Position
 
-Milestone: v2.0 Fix the Foundation — SHIPPED
-Status: Complete
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-13 — Milestone v3.0 started
 Last activity: 2026-04-13
 
 Progress: [██░░░░░░░░] 20% (v1.0 complete, v2.0 not started)
