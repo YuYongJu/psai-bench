@@ -298,6 +298,35 @@ def score_sequences(
     return report
 
 
+def compute_perception_gap(
+    metadata_report: ScoreReport,
+    visual_report: ScoreReport,
+) -> float:
+    """Compute the perception-reasoning gap between metadata and visual track performance.
+
+    Gap = metadata_report.aggregate_score - visual_report.aggregate_score
+
+    A positive gap indicates the model performs better when metadata context is available
+    (metadata track > visual track), meaning video perception alone is insufficient.
+    A negative gap is unusual and indicates metadata context hurt performance.
+
+    Args:
+        metadata_report: ScoreReport from scoring metadata-track scenarios.
+        visual_report: ScoreReport from scoring visual_only (or visual_contradictory) scenarios.
+
+    Returns:
+        float: The aggregate score difference (metadata minus visual).
+
+    Raises:
+        ValueError: If either report has n_scenarios == 0.
+    """
+    if metadata_report.n_scenarios == 0:
+        raise ValueError("Cannot compute gap: metadata_report has 0 scenarios")
+    if visual_report.n_scenarios == 0:
+        raise ValueError("Cannot compute gap: visual_report has 0 scenarios")
+    return metadata_report.aggregate_score - visual_report.aggregate_score
+
+
 def _safety_score(tdr: float, fasr: float, w_threat: float, w_false: float) -> float:
     """Compute Safety Score = (w_threat * TDR + w_false * FASR) / (w_threat + w_false)."""
     if w_threat + w_false == 0:
