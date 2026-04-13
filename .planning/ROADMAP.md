@@ -177,11 +177,14 @@ Plans:
 **Depends on**: Phase 20, Phase 21
 **Requirements**: TEST-01, TEST-02, TEST-03, TEST-04, TEST-05, DOC-02
 **Success Criteria** (what must be TRUE):
-  1. `pytest` exits 0 with all 238 existing tests plus new v4.0 tests passing — no regressions on any v1/v2/v3 fixture
+  1. `pytest` exits 0 with all 337 existing tests plus new v4.0 tests passing — no regressions on any v1/v2/v3 fixture
   2. A v1.0 output file (no `dispatch` field) scored with `score_run()` produces the same result as in v3.0; scored with `score_dispatch_run()` raises a clear error or returns a report indicating no dispatch data
   3. An end-to-end integration test runs: generate v4.0 scenarios → run a baseline → call `score_dispatch_run()` → assert `cost_ratio` is a positive float and `per_action_breakdown` has entries for all 5 dispatch classes
   4. `EVALUATION_PROTOCOL.md` documents dispatch scoring, the cost model, configurable cost profiles, and the multi-site generalization protocol with the leakage audit results
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 22-01-PLAN.md — E2E integration tests + backward compat tests (TEST-01 through TEST-05)
+- [ ] 22-02-PLAN.md — EVALUATION_PROTOCOL.md v4.0 additions (DOC-02)
 
 ## Progress Table
 
@@ -191,4 +194,4 @@ Plans:
 | 19. Scoring Pipeline and Baselines | 2/2 | Complete    | 2026-04-13 |
 | 20. Adversarial v4 Generator | 2/2 | Complete    | 2026-04-13 |
 | 21. Multi-Site Generalization | 2/2 | Complete    | 2026-04-13 |
-| 22. CLI Integration, Tests, and Documentation | 0/? | Not started | - |
+| 22. CLI Integration, Tests, and Documentation | 0/2 | Not started | - |
