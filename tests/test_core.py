@@ -636,68 +636,114 @@ class TestMissingResponsesScoring:
 
 
 # ---------------------------------------------------------------------------
-# 9. SUSPICIOUS cap penalty
+# 9. Decisiveness metric
 # ---------------------------------------------------------------------------
 
-class TestSuspiciousPenalty:
+class TestDecisiveness:
 
-    def test_no_penalty_under_30pct(self):
-        # 1 out of 4 = 25% SUSPICIOUS, under cap
+    def test_decisiveness_all_decisive(self):
+        """All THREAT/BENIGN predictions -> decisiveness = 1.0"""
         scenarios = [
-            _make_scenario("s1", "THREAT"),
-            _make_scenario("s2", "BENIGN"),
-            _make_scenario("s3", "SUSPICIOUS"),
-            _make_scenario("s4", "THREAT"),
+            {"alert_id": f"d-{i}", "_meta": {"ground_truth": "THREAT", "difficulty": "easy",
+                                              "source_dataset": "ucf", "source_category": "test"}}
+            for i in range(10)
         ]
         outputs = [
-            _make_output("s1", "THREAT"),
-            _make_output("s2", "BENIGN"),
-            _make_output("s3", "SUSPICIOUS"),  # 1 SUSPICIOUS
-            _make_output("s4", "THREAT"),
+            {"alert_id": f"d-{i}", "verdict": "THREAT" if i < 5 else "BENIGN", "confidence": 0.9}
+            for i in range(10)
         ]
         report = score_run(scenarios, outputs)
-        assert report.suspicious_penalty == 0.0
+        assert abs(report.decisiveness - 1.0) < 1e-9
 
-    def test_penalty_applied_over_30pct(self):
-        # All 4 SUSPICIOUS = 100% → penalty = (1.0 - 0.30) * 2 = 1.4
+    def test_decisiveness_all_suspicious(self):
+        """All SUSPICIOUS predictions -> decisiveness = 0.0"""
         scenarios = [
-            _make_scenario(f"s{i}", "THREAT") for i in range(4)
+            {"alert_id": f"d-{i}", "_meta": {"ground_truth": "THREAT", "difficulty": "easy",
+                                              "source_dataset": "ucf", "source_category": "test"}}
+            for i in range(10)
         ]
         outputs = [
-            _make_output(f"s{i}", "SUSPICIOUS") for i in range(4)
+            {"alert_id": f"d-{i}", "verdict": "SUSPICIOUS", "confidence": 0.5}
+            for i in range(10)
         ]
         report = score_run(scenarios, outputs)
-        expected_penalty = (1.0 - 0.30) * 2  # 1.4
-        assert abs(report.suspicious_penalty - expected_penalty) < 1e-9
-        # Aggregate should be reduced (possibly to 0 or negative clamped)
-        assert report.aggregate_score < report.safety_score_3_1
+        assert abs(report.decisiveness - 0.0) < 1e-9
 
-    def test_always_suspicious_gets_penalized(self):
-        scenarios = MetadataGenerator(seed=42).generate_ucf_crime(n=100)
-        outputs = always_suspicious_baseline(scenarios)
+
+# ---------------------------------------------------------------------------
+# 10. Ambiguous scenario handling
+# ---------------------------------------------------------------------------
+
+class TestAmbiguousHandling:
+
+    def _make_scenarios(self, n_normal=10, n_ambiguous=3):
+        scenarios = []
+        for i in range(n_normal):
+            scenarios.append({
+                "alert_id": f"normal-{i}",
+                "_meta": {"ground_truth": "THREAT", "difficulty": "easy",
+                          "source_dataset": "ucf", "source_category": "test"}
+            })
+        for i in range(n_ambiguous):
+            scenarios.append({
+                "alert_id": f"ambig-{i}",
+                "_meta": {"ground_truth": "SUSPICIOUS", "difficulty": "hard",
+                          "source_dataset": "ucf", "source_category": "test",
+                          "ambiguity_flag": True}
+            })
+        return scenarios
+
+    def test_ambiguous_excluded_from_aggregate(self):
+        scenarios = self._make_scenarios(10, 3)
+        outputs = [{"alert_id": s["alert_id"], "verdict": "THREAT", "confidence": 0.9}
+                   for s in scenarios]
         report = score_run(scenarios, outputs)
-        assert report.suspicious_fraction == 1.0
-        assert report.suspicious_penalty > 0.0
-        # penalty = (1.0 - 0.30) * 2 = 1.4
-        assert abs(report.suspicious_penalty - 1.4) < 1e-9
+        # Main report should have n_scenarios == 10 (excluding 3 ambiguous)
+        assert report.n_scenarios == 10
+        assert report.n_ambiguous == 3
 
-    def test_aggregate_formula(self):
-        # Verify: aggregate = safety_3_1 * (1 - penalty) * calibration_factor
+    def test_ambiguous_bucket_scored_separately(self):
+        scenarios = self._make_scenarios(10, 3)
+        outputs = [{"alert_id": s["alert_id"], "verdict": "THREAT", "confidence": 0.9}
+                   for s in scenarios]
+        report = score_run(scenarios, outputs)
+        assert report.ambiguous_report is not None
+        assert report.ambiguous_report.n_scenarios == 3
+
+
+# ---------------------------------------------------------------------------
+# 11. Dashboard formatting
+# ---------------------------------------------------------------------------
+
+class TestDashboard:
+
+    def test_format_dashboard_output(self):
+        from psai_bench.scorer import format_dashboard
+        report = ScoreReport(tdr=0.95, fasr=0.80, decisiveness=0.75, ece=0.05,
+                             aggregate_score=0.85, accuracy_easy=0.9, accuracy_medium=0.8,
+                             accuracy_hard=0.7, n_scenarios=100, n_threats=40, n_benign=40)
+        result = format_dashboard(report)
+        assert isinstance(result, str)
+        assert "TDR" in result
+        assert "FASR" in result
+        assert "Decisiveness" in result
+        assert "Formula" in result
+
+    def test_aggregate_new_formula(self):
+        """Verify aggregate = 0.4*TDR + 0.3*FASR + 0.2*Decisiveness + 0.1*(1-ECE)"""
         scenarios = [
-            _make_scenario("s1", "THREAT"),
-            _make_scenario("s2", "BENIGN"),
+            {"alert_id": f"agg-{i}", "_meta": {"ground_truth": gt, "difficulty": "easy",
+                                                "source_dataset": "ucf", "source_category": "test"}}
+            for i, gt in enumerate(["THREAT"] * 5 + ["BENIGN"] * 5)
         ]
         outputs = [
-            _make_output("s1", "THREAT", 0.9),
-            _make_output("s2", "BENIGN", 0.9),
+            {"alert_id": f"agg-{i}", "verdict": v, "confidence": 0.9}
+            for i, v in enumerate(["THREAT"] * 5 + ["BENIGN"] * 5)
         ]
         report = score_run(scenarios, outputs)
-        expected = (
-            report.safety_score_3_1
-            * (1 - report.suspicious_penalty)
-            * report.calibration_factor
-        )
-        assert abs(report.aggregate_score - expected) < 1e-9
+        expected = (0.4 * report.tdr + 0.3 * report.fasr
+                    + 0.2 * report.decisiveness + 0.1 * (1.0 - report.ece))
+        assert abs(report.aggregate_score - expected) < 1e-6
 
 
 # ---------------------------------------------------------------------------

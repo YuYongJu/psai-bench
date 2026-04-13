@@ -137,7 +137,7 @@ class TestCLIScore:
             "--outputs", outputs_file,
         ])
         assert result.exit_code == 0
-        assert "Primary Metrics" in result.output
+        assert "PSAI-Bench Metrics Dashboard" in result.output
         assert "Threat Detection Rate" in result.output
 
     def test_score_json_format(self, runner, generated_scenarios):
@@ -253,20 +253,3 @@ class TestCLICompare:
         assert "System A" in result.output
 
 
-class TestCLIAnalyzeSuspicious:
-    """Test the suspicious cap analysis command."""
-
-    def test_analyze_suspicious_cap(self, runner, generated_scenarios, tmp_path):
-        scenarios_file, _ = generated_scenarios
-        out_file = str(tmp_path / "suspicious_analysis.json")
-        result = runner.invoke(main, [
-            "analyze-suspicious-cap",
-            "--scenarios", scenarios_file,
-            "--output", out_file,
-        ])
-        assert result.exit_code == 0
-        assert Path(out_file).exists()
-        with open(out_file) as f:
-            data = json.load(f)
-        assert len(data) > 0
-        assert "target_suspicious_rate" in data[0]
