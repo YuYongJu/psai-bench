@@ -108,7 +108,7 @@ Plans:
 
 ## v4.0 Operational Realism — Phases 18-22
 
-- [ ] **Phase 18: Schema and Cost Model Foundation** - Extend schema with dispatch field, define cost model, publish dispatch decision rubric
+- [x] **Phase 18: Schema and Cost Model Foundation** - Extend schema with dispatch field, define cost model, publish dispatch decision rubric (completed 2026-04-13)
 - [ ] **Phase 19: Scoring Pipeline and Baselines** - Add dispatch scoring function, extend dashboard, update all baselines
 - [ ] **Phase 20: Adversarial v4 Generator** - Implement behavioral adversarial scenarios with isolated RNG and separate description pools
 - [ ] **Phase 21: Multi-Site Generalization** - Add site-type filtering, leakage audit, and generalization gap metric
@@ -128,8 +128,8 @@ Plans:
   5. `scipy` is declared as a direct dependency in pyproject.toml and `pip install psai-bench` on a clean environment pulls it explicitly
 **Plans**: 2 plans
 Plans:
-- [ ] 18-01-PLAN.md — Schema extension (dispatch field, DISPATCH_ACTIONS, _meta fields, v4 version) + scipy fix + dispatch decision rubric
-- [ ] 18-02-PLAN.md — Cost model (cost_model.py: CostModel, DISPATCH_COSTS, compute_optimal_dispatch, score_dispatch, sensitivity analysis)
+- [x] 18-01-PLAN.md — Schema extension (dispatch field, DISPATCH_ACTIONS, _meta fields, v4 version) + scipy fix + dispatch decision rubric
+- [x] 18-02-PLAN.md — Cost model (cost_model.py: CostModel, DISPATCH_COSTS, compute_optimal_dispatch, score_dispatch, sensitivity analysis)
 
 ### Phase 19: Scoring Pipeline and Baselines
 **Goal**: Users who supply `dispatch` fields in their output get cost-aware scoring alongside the existing triage metrics — and all 4 baselines output dispatch decisions by default
@@ -178,7 +178,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 18. Schema and Cost Model Foundation | 0/2 | Not started | - |
+| 18. Schema and Cost Model Foundation | 2/2 | Complete    | 2026-04-13 |
 | 19. Scoring Pipeline and Baselines | 0/? | Not started | - |
 | 20. Adversarial v4 Generator | 0/? | Not started | - |
 | 21. Multi-Site Generalization | 0/? | Not started | - |

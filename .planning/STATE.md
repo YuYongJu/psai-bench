@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v4.0
-milestone_name: Operational Realism
+milestone_name: Operational Realism — Phases 18-22
 status: planning
-stopped_at: Milestone v4.0 roadmap created — Phase 18 ready to plan
-last_updated: "2026-04-13T21:46:00.000Z"
+stopped_at: Roadmap created for v4.0, Phase 18 ready to plan
+last_updated: "2026-04-13T22:36:36.274Z"
 last_activity: 2026-04-13
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 2
+  completed_plans: 2
+  percent: 100
 ---
 
 # State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-04-13)
 
 ## Current Position
 
-Phase: 18 of 22 (schema and cost model foundation)
+Phase: 19 of 22 (scoring pipeline and baselines)
 Plan: Not started
 Status: Ready to plan
 Last activity: 2026-04-13
@@ -49,6 +49,7 @@ Progress: [░░░░░░░░░░] 0% (v4.0 starting)
 | 20 (adversarial v4) | 0/? | - | - |
 | 21 (multi-site) | 0/? | - | - |
 | 22 (CLI + tests + docs) | 0/? | - | - |
+| 18 | 2 | - | - |
 
 *Updated after each plan completion*
 
