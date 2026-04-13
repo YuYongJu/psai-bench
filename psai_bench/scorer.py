@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from psai_bench.cost_model import CostModel, CostScoreReport, score_dispatch as _cost_model_score_dispatch
+
 
 @dataclass
 class ScoreReport:
@@ -584,3 +586,27 @@ def score_multiple_runs(
         summary[f"{metric}_max"] = float(np.max(values))
 
     return summary
+
+
+def score_dispatch_run(
+    scenarios: list[dict],
+    outputs: list[dict],
+    model: CostModel | None = None,
+) -> CostScoreReport:
+    """Score dispatch decisions alongside triage scoring.
+
+    Delegates entirely to cost_model.score_dispatch(). This function
+    exists as the public scorer.py import surface for dispatch evaluation.
+    score_run() is NOT called or modified by this function.
+
+    Args:
+        scenarios: List of scenario dicts from generate (need _meta.ground_truth,
+                   context.site_type, zone.sensitivity, device.false_positive_rate).
+        outputs: List of output dicts (each may have 'dispatch' field).
+        model: Optional CostModel to override default cost table.
+
+    Returns:
+        CostScoreReport with expected cost, optimal cost, cost ratio,
+        per_action_counts, per_site_mean_cost, and sensitivity_profiles.
+    """
+    return _cost_model_score_dispatch(scenarios, outputs, model)
