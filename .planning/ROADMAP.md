@@ -106,7 +106,7 @@ Plans:
 **Milestone Goal:** Add visual-only, contradictory, and temporal scenario tracks plus a perception-reasoning gap metric — making the benchmark genuinely publishable as a multi-modal evaluation tool.
 
 - [x] **Phase 11: Schema v3** - Extend schema with new tracks, relax required fields for visual tracks, add _meta v3 fields, pin seed-42 regression hash (completed 2026-04-13)
-- [ ] **Phase 12: Visual-Only Scenarios** - Build VisualOnlyGenerator with UCF Crime-based GT derivation and leakage-safe field population
+- [x] **Phase 12: Visual-Only Scenarios** - Build VisualOnlyGenerator with UCF Crime-based GT derivation and leakage-safe field population (completed 2026-04-13)
 - [ ] **Phase 13: Contradictory Scenarios** - Build ContradictoryGenerator with video-derived GT, dual GT storage, and contradictory description pools
 - [ ] **Phase 14: Temporal Sequences** - Build TemporalSequenceGenerator with escalation narrative patterns and sequence threading
 - [ ] **Phase 15: Scoring Updates** - Add track partitioning, score_sequences(), and perception-reasoning gap metric without modifying score_run()
@@ -143,7 +143,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 12-01-PLAN.md — Implement VisualOnlyGenerator (generators.py + cli.py) and test suite (conftest.py + test_visual_only.py)
+- [x] 12-01-PLAN.md — Implement VisualOnlyGenerator (generators.py + cli.py) and test suite (conftest.py + test_visual_only.py)
 
 ### Phase 13: Contradictory Scenarios
 **Goal**: Users can generate contradictory scenarios where metadata and video content deliberately disagree and GT always follows the video content label
@@ -227,7 +227,7 @@ Plans:
 | 5. Documentation + Release | v1.0 | 3/3 | Complete | 2026-04-13 |
 | 6-10. v2.0 Foundation | v2.0 | 9/9 | Complete | 2026-04-13 |
 | 11. Schema v3 | v3.0 | 2/2 | Complete    | 2026-04-13 |
-| 12. Visual-Only Scenarios | v3.0 | 0/1 | Not started | - |
+| 12. Visual-Only Scenarios | v3.0 | 1/1 | Complete    | 2026-04-13 |
 | 13. Contradictory Scenarios | v3.0 | 0/2 | Not started | - |
 | 14. Temporal Sequences | v3.0 | 0/1 | Not started | - |
 | 15. Scoring Updates | v3.0 | 0/2 | Not started | - |
