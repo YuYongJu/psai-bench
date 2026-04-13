@@ -21,6 +21,7 @@ ALERT_SCHEMA = {
             "enum": [
                 "visual", "metadata", "multi_sensor",       # existing v2 tracks
                 "visual_only", "visual_contradictory", "temporal",  # v3 new tracks
+                "adversarial_v4",                           # v4 behavioral adversarial
             ],
         },
         "severity": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
