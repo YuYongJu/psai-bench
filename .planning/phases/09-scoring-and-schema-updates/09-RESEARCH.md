@@ -6,7 +6,7 @@
 
 ## Summary
 
-Phase 9 modifies three existing files (`scorer.py`, `schema.py`, `cli.py`) and indirectly requires changes to `validation.py`. All changes are self-contained within the scoring and schema subsystem. The codebase is well-structured and the required changes are surgical.
+Phase 9 modifies five files: `scorer.py`, `schema.py`, `cli.py`, `validation.py`, and `tests/test_core.py`. All changes are self-contained within the scoring and schema subsystem. The codebase is well-structured and the required changes are surgical.
 
 The primary risk is test breakage: at least 6 existing tests assert behavior that this phase explicitly inverts. The planner must sequence test updates as a distinct wave, not an afterthought. Missing this will cause the suite to fail mid-phase and create confusion about what is broken vs intentionally changed.
 
@@ -282,6 +282,18 @@ This is the most critical section for planning. The following tests assert behav
 **How to avoid:** When updating schema.py, also update validation.py's reasoning check to be conditional on reasoning being present.
 **Warning signs:** `test_short_reasoning_warned` behavior becomes unclear — does it warn on absent reasoning or only on short reasoning?
 
+### Pitfall 6: score_multiple_runs() Not Updated for New Fields
+**What goes wrong:** `score_multiple_runs()` (scorer.py lines 266-292) iterates reports and extracts `key_metrics` including `"aggregate_score"` and `"suspicious_fraction"`. After the formula change, `"decisiveness"` is missing from `key_metrics`. Also, calling `to_dict()` on each report triggers the nested-ScoreReport serialization issue (Pitfall 4) since `ambiguous_report` is now a nested `ScoreReport`.
+**Why it happens:** `score_multiple_runs()` was not listed in CONTEXT.md's files to modify but directly depends on `ScoreReport` fields.
+**How to avoid:** Add `"decisiveness"` to `key_metrics` in `score_multiple_runs()`. Fix `to_dict()` before calling it from multi-run aggregation.
+**Warning signs:** Multi-run summary JSON missing `decisiveness_mean` / `decisiveness_std` keys; or `TypeError` on JSON dump.
+
+### Pitfall 7: analyze_suspicious_cap Command Left with Stale Semantics
+**What goes wrong:** The `analyze_suspicious_cap` CLI command (cli.py lines 204-262) simulates SUSPICIOUS usage rates and reports `suspicious_penalty` and `aggregate_score` under the OLD multiplicative formula. After Phase 9, the penalty mechanism is gone and the aggregate formula is different, so the command produces meaningless output while appearing to work.
+**Why it happens:** The command is not listed in CONTEXT.md's scope. It was purpose-built for the old formula and is now invalidated.
+**How to avoid:** Make a decision: either rewrite it to test Decisiveness sensitivity (analogous to SUSPICIOUS sensitivity), or delete it. Leaving it silently producing misleading numbers is a researcher-facing embarrassment.
+**Warning signs:** Command runs without error but prints `suspicious_penalty` values that are always 0.0.
+
 ## Code Examples
 
 ### Verified: Current OUTPUT_SCHEMA required list
@@ -343,13 +355,13 @@ def _make_output(alert_id, verdict, confidence=0.85):
 
 ## Files to Modify (Complete List)
 
-CONTEXT.md lists three files, but there are four:
+CONTEXT.md lists three files, but five files require changes:
 
 | File | Change Type | Scope |
 |------|-------------|-------|
 | `psai_bench/schema.py` | Edit OUTPUT_SCHEMA required list; add confidence description | Small — 3 targeted edits |
-| `psai_bench/scorer.py` | Add decisiveness, ambiguous partition, new aggregate, format_dashboard() | Medium — refactor score_run + new function |
-| `psai_bench/cli.py` | Replace _print_report_table with format_dashboard; update score + baselines commands | Small — 2 call sites |
+| `psai_bench/scorer.py` | Add decisiveness, ambiguous partition, new aggregate, format_dashboard(); update score_multiple_runs() key_metrics | Medium — refactor score_run, fix multi-run aggregation |
+| `psai_bench/cli.py` | Replace _print_report_table with format_dashboard; update score + baselines + evaluate output labels; decide fate of analyze_suspicious_cap | Small-Medium — 3-4 call sites + 1 decision |
 | `psai_bench/validation.py` | Update reasoning-length check to handle optional reasoning | Small — 1 conditional check |
 | `tests/test_core.py` | Delete TestSuspiciousPenalty; rewrite 2 tests; add 10 new tests | Medium — 15 test changes |
 
@@ -409,6 +421,11 @@ CONTEXT.md lists three files, but there are four:
    - What we know: `validate_submission()` warns on reasoning under 20 words. After SCHEMA-01, reasoning is optional.
    - What's unclear: Is the warning useful when reasoning is present but short?
    - Recommendation: Make it conditional — warn only when `out.get("reasoning")` is truthy AND under 20 words. This preserves the useful check without penalizing absent reasoning.
+
+3. **What happens to the `analyze_suspicious_cap` CLI command?**
+   - What we know: The command (cli.py lines 204-262) simulates systems at different SUSPICIOUS usage rates and reports `suspicious_penalty` and `aggregate_score` under the OLD formula. Both change meaning in Phase 9.
+   - What's unclear: Is this command still useful? If repurposed, it should simulate Decisiveness sensitivity instead.
+   - Recommendation: Delete it — the SUSPICIOUS penalty analysis was specific to the old mechanism. If Decisiveness sensitivity analysis is wanted, create a new `analyze_decisiveness` command. Leaving the old command is actively misleading.
 
 ## Environment Availability
 
