@@ -169,10 +169,10 @@ Plans:
   2. All three escalation pattern types appear in generated batches: monotonic escalation, escalation-then-resolution, and false alarm sequence
   3. `sequence_position` values within each group are unique integers starting at 1 — no duplicate positions within a sequence
   4. Escalation point varies across sequences (not always alert 2 of 5) — a position-stump leakage test passes
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 14-01: Implement TemporalSequenceGenerator with isolated RNG, sequence threading, and all three escalation pattern types
+- [ ] 14-01-PLAN.md — Implement TemporalSequenceGenerator with isolated RNG, sequence threading, and all three escalation pattern types
 
 ### Phase 15: Scoring Updates
 **Goal**: The scoring dashboard partitions results by track, score_sequences() measures sequence evaluation metrics, and the perception-reasoning gap is computable — all without modifying score_run()
