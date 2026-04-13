@@ -8,17 +8,16 @@ PSAI-Bench is an open-source benchmark for evaluating any AI system (LLM, ML, ru
 
 Provide a rigorous, non-trivially-solvable benchmark where no single input field reveals the ground truth — models must reason across multiple context signals to triage correctly.
 
-## Current Milestone: v3.0 Perception-Reasoning Gap
+## Current Milestone: v4.0 Operational Realism
 
-**Goal:** Make the benchmark genuinely publishable — add visual-only scenarios, contradictory scenarios, temporal alert sequences, and frame extraction baseline to measure whether video actually adds value over metadata-only triage.
+**Goal:** Transform the benchmark from triage accuracy into operational decision-support evaluation — 5-class dispatch, cost-aware scoring, multi-site generalization, and adversarial robustness.
 
 **Target features:**
-- Visual-only scenarios (video + minimal metadata — no description, severity, or zone context)
-- Contradictory scenarios (metadata says X, video shows Y — visual perception overrides text)
-- Temporal alert sequences (3-5 related alerts building a narrative, escalation patterns)
-- Frame extraction baseline (keyframe image description vs full video temporal analysis)
-- Visual and temporal track scoring updates
-- Evaluation protocol document
+- 5-class dispatch decisions (armed response, patrol, operator review, auto-suppress, request data)
+- Cost model with per-action costs and expected operational cost scoring
+- Multi-site generalization testing (train on solar → test on commercial/campus)
+- Adversarial robustness scenarios (loitering as waiting, authorized as intrusion, environmental as human)
+- Updated schema, scoring, CLI, and documentation for 5-class output
 
 ## Requirements
 
@@ -27,7 +26,7 @@ Provide a rigorous, non-trivially-solvable benchmark where no single input field
 - ✓ CLI architecture (click-based, well-structured) — v1.0
 - ✓ Scoring engine implementation (math correct) — v1.0
 - ✓ Statistical tools (McNemar's, bootstrap CIs, run consistency) — v1.0
-- ✓ 133 passing tests — v2.0
+- ✓ 238 passing tests — v3.0
 - ✓ GitHub Actions CI (Python 3.10/3.11/3.12 matrix) — v1.0
 - ✓ Apache-2.0 LICENSE, CONTRIBUTING, CODE_OF_CONDUCT — v1.0
 - ✓ Repository hygiene (clean git history, no generated data committed) — v1.0
@@ -40,26 +39,30 @@ Provide a rigorous, non-trivially-solvable benchmark where no single input field
 - ✓ Published decision rubric with worked examples — v2.0
 - ✓ BYOS-first README and documentation — v2.0
 
+- ✓ Visual-only scenarios (GT from video content, not metadata) — v3.0
+- ✓ Contradictory scenarios (metadata vs video disagree, GT follows video) — v3.0
+- ✓ Temporal alert sequences (3 escalation patterns, sequence scoring) — v3.0
+- ✓ Frame extraction baseline (opencv-python-headless optional) — v3.0
+- ✓ Perception-reasoning gap metric — v3.0
+- ✓ Evaluation protocol document — v3.0
+
 ### Active
 
-(Defined per v3.0 milestone — see REQUIREMENTS.md)
+(Defined per v4.0 milestone — see REQUIREMENTS.md)
 
 ### Out of Scope
 
 - Running model evaluations (costs money, depends on API keys — user's job)
 - Web dashboard or visualization UI — benchmark is CLI-first
 - Paper writing — separate effort
-- Video processing implementation — v3.0
-- Dispatch decisions (5 action types) — v4.0
-- Cost-aware scoring — v4.0
 
 ## Context
 
-- v1.0 shipped: repo at github.com/YuYongJu/psai-bench, all infrastructure working
-- v2.0 shipped: scientific foundation rebuilt — context-dependent GT, 133 tests, BYOS workflow
-- v2.0 fixed all v1.0 leakage flaws (description, severity, category no longer predict GT)
-- GPT-4o evaluation exists but results need re-running on v2.0 scenarios
-- VISION.md documents v3.0/v4.0 roadmap
+- v1.0 shipped: infrastructure (CLI, scoring, stats, CI)
+- v2.0 shipped: scientific foundation (context-dependent GT, no leakage, BYOS workflow)
+- v3.0 shipped: multi-modal (visual-only, contradictory, temporal tracks, perception gap metric, 238 tests)
+- GPT-4o evaluation exists but results need re-running on v2.0+ scenarios
+- VISION.md documents v4.0 roadmap
 
 ## Constraints
 
@@ -99,4 +102,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-13 after milestone v3.0 initialization*
+*Last updated: 2026-04-13 after milestone v4.0 initialization*

@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.0
-milestone_name: Perception-Reasoning Gap
+milestone: v4.0
+milestone_name: Operational Realism
 status: planning
-stopped_at: Roadmap created for v3.0, Phase 11 ready to plan
-last_updated: "2026-04-13T21:03:44.291Z"
+stopped_at: Milestone v4.0 started — defining requirements
+last_updated: "2026-04-13T21:15:00.000Z"
 last_activity: 2026-04-13
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 10
-  completed_plans: 10
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # State
