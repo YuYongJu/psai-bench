@@ -408,6 +408,8 @@ class MetadataGenerator:
 
     def generate_caltech(self, n: int = 5000) -> list[dict]:
         """Generate n metadata-only scenarios from Caltech Camera Traps categories."""
+        if self.version == "v2":
+            return self.generate_caltech_v2(n)
         categories = list(CALTECH_CATEGORY_MAP.keys())
         weights = [CALTECH_CATEGORY_MAP[c]["weight"] for c in categories]
         weights = np.array(weights) / sum(weights)
@@ -462,6 +464,129 @@ class MetadataGenerator:
                     "source_category": cat,
                     "seed": self.seed,
                     "index": i,
+                },
+            }
+            scenarios.append(alert)
+
+        return scenarios
+
+    def generate_caltech_v2(self, n: int = 5000) -> list[dict]:
+        """Generate n v2 Caltech scenarios with context-dependent GT."""
+        from psai_bench.distributions import (
+            DESCRIPTION_POOL_AMBIGUOUS,
+            DESCRIPTION_POOL_UNAMBIGUOUS_BENIGN,
+            DESCRIPTION_POOL_UNAMBIGUOUS_THREAT,
+            assign_ground_truth_v2,
+        )
+
+        categories = list(CALTECH_CATEGORY_MAP.keys())
+        weights = [CALTECH_CATEGORY_MAP[c]["weight"] for c in categories]
+        weights = np.array(weights) / sum(weights)
+
+        adversarial_flags = self.rng.random(n) < 0.20
+
+        scenarios = []
+        for i in range(n):
+            cat = self.rng.choice(categories, p=weights)
+            mapping = CALTECH_CATEGORY_MAP[cat]
+
+            desc_type_roll = self.rng.random()
+            if desc_type_roll < 0.70:
+                description = self.rng.choice(DESCRIPTION_POOL_AMBIGUOUS)
+                desc_category = "ambiguous"
+            elif desc_type_roll < 0.85:
+                description = self.rng.choice(DESCRIPTION_POOL_UNAMBIGUOUS_THREAT)
+                desc_category = "unambiguous_threat"
+            else:
+                description = self.rng.choice(DESCRIPTION_POOL_UNAMBIGUOUS_BENIGN)
+                desc_category = "unambiguous_benign"
+
+            severity = self.rng.choice(mapping["severity_range"])
+            time_of_day = self.rng.choice(TOD_OPTIONS, p=[0.25, 0.35, 0.20, 0.20])
+            zone = sample_zone(self.rng)
+            device = sample_device(zone["type"], self.rng)
+            weather = sample_weather(time_of_day, self.rng)
+            site_type = sample_site_type(self.rng)
+
+            badge_roll = self.rng.random()
+            if badge_roll < 0.20:
+                badge_minutes_ago = int(self.rng.randint(1, 10))
+            elif badge_roll < 0.40:
+                badge_minutes_ago = int(self.rng.randint(10, 30))
+            else:
+                badge_minutes_ago = None
+
+            is_adversarial = bool(adversarial_flags[i])
+            if is_adversarial:
+                severity, adj_zone_type, adj_sensitivity, time_of_day, adj_fpr = (
+                    _inject_adversarial_signals(
+                        severity, zone["type"], zone["sensitivity"],
+                        time_of_day, device["false_positive_rate"], self.rng,
+                    )
+                )
+                zone["type"] = adj_zone_type
+                zone["sensitivity"] = adj_sensitivity
+                device["false_positive_rate"] = round(adj_fpr, 3)
+
+            gt, weighted_sum, is_ambiguous = assign_ground_truth_v2(
+                zone_type=zone["type"],
+                zone_sensitivity=zone["sensitivity"],
+                time_of_day=time_of_day,
+                device_fpr=device["false_positive_rate"],
+                severity=severity,
+                badge_access_minutes_ago=badge_minutes_ago,
+                rng=self.rng,
+            )
+
+            difficulty = _assign_difficulty(
+                cat, zone["sensitivity"], time_of_day,
+                device["false_positive_rate"], self.rng, dataset="caltech",
+            )
+            if is_adversarial and difficulty == "easy":
+                difficulty = "medium"
+
+            badge_access_events = []
+            if badge_minutes_ago is not None:
+                badge_access_events = [{
+                    "minutes_ago": badge_minutes_ago,
+                    "event_type": "badge_granted",
+                    "resolved": True,
+                }]
+
+            alert = {
+                "alert_id": f"caltech-meta-v2-{i:05d}",
+                "timestamp": _generate_timestamp(time_of_day, self.rng),
+                "track": "metadata",
+                "severity": severity,
+                "description": description,
+                "source_type": "camera",
+                "zone": zone,
+                "device": device,
+                "context": {
+                    "recent_zone_events_1h": _generate_recent_events(
+                        zone["type"], time_of_day, self.rng
+                    ),
+                    "recent_badge_access_1h": badge_access_events,
+                    "weather": weather,
+                    "time_of_day": time_of_day,
+                    "expected_activities": EXPECTED_ACTIVITIES.get(site_type, []),
+                    "cross_zone_activity": {},
+                    "site_type": site_type,
+                },
+                "visual_data": None,
+                "additional_sensors": [],
+                "_meta": {
+                    "ground_truth": gt,
+                    "weighted_sum": weighted_sum,
+                    "difficulty": difficulty,
+                    "source_dataset": "caltech_camera_traps",
+                    "source_category": cat,
+                    "seed": self.seed,
+                    "index": i,
+                    "adversarial": is_adversarial,
+                    "ambiguity_flag": is_ambiguous,
+                    "description_category": desc_category,
+                    "generation_version": "v2",
                 },
             }
             scenarios.append(alert)
