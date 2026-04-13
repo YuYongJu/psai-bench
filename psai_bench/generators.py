@@ -10,14 +10,12 @@ Usage:
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Literal
 
 import numpy as np
 
 from psai_bench.distributions import (
     ACCESS_EVENTS,
     CALTECH_CATEGORY_MAP,
-    CROSS_ZONE_PATTERNS,
     EXPECTED_ACTIVITIES,
     TOD_OPTIONS,
     TOD_WEIGHTS_BENIGN,
@@ -28,7 +26,6 @@ from psai_bench.distributions import (
     sample_weather,
     sample_zone,
 )
-from psai_bench.schema import validate_alert
 
 # Difficulty assignment thresholds.
 # Easy: unambiguous ground truth, high-severity or clearly benign.

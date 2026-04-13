@@ -19,7 +19,6 @@ import json
 import os
 import time
 from abc import ABC, abstractmethod
-from pathlib import Path
 
 SYSTEM_PROMPT = """You are an AI security triage system for critical infrastructure sites. Your job is to analyze security alerts and classify them.
 

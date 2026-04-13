@@ -11,7 +11,7 @@ Catches issues that would embarrass us if a researcher found them:
 from collections import Counter
 from dataclasses import dataclass, field
 
-from psai_bench.schema import OUTPUT_SCHEMA, VERDICTS, validate_output
+from psai_bench.schema import VERDICTS, validate_output
 
 
 @dataclass

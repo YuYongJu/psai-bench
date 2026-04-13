@@ -11,7 +11,6 @@ The 290 UCF Crime test videos (140 anomaly + 150 normal) produce 290 Visual Trac
 scenarios. Each scenario has BOTH real video AND synthetic contextual metadata.
 """
 
-import json
 from pathlib import Path
 
 import numpy as np

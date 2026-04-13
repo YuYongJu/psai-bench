@@ -8,7 +8,6 @@ Implements all metrics defined in Section 4 of the specification:
 - Cross-dataset generalization gap
 """
 
-from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
 import numpy as np

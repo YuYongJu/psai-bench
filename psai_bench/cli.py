@@ -468,7 +468,7 @@ def evaluate(scenarios: str, model: str, n: int | None, delay: float, output: st
 
         # Score immediately
         report = score_run(scenario_data, outputs)
-        click.echo(f"\n  --- Quick Score ---")
+        click.echo("\n  --- Quick Score ---")
         click.echo(f"  Accuracy: {report.accuracy:.4f}")
         click.echo(f"  TDR: {report.tdr:.4f}")
         click.echo(f"  FASR: {report.fasr:.4f}")
@@ -568,7 +568,7 @@ def analyze_gap(results_dir: str, scenarios: str, output: str):
             click.echo(f"    Gap (visual - meta): {gap:+.3f}")
             click.echo(f"    Safety Score gap:    {ss_gap:+.3f}")
             if abs(gap) < 0.02:
-                click.echo(f"    >> Video adds negligible value for this model")
+                click.echo("    >> Video adds negligible value for this model")
             elif gap > 0:
                 click.echo(f"    >> Video improves triage by {gap:.1%}")
             else:

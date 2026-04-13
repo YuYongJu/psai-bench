@@ -516,7 +516,7 @@ class TestMcNemarsTest:
         both_wrong = 25
         a_only = 20
         b_only = 5
-        both_right = n - both_wrong - a_only - b_only  # 50
+        n - both_wrong - a_only - b_only  # 50
 
         idx = 0
         # Both wrong

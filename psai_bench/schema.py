@@ -5,7 +5,7 @@ All scenario generators produce alerts conforming to ALERT_SCHEMA.
 All system outputs must conform to OUTPUT_SCHEMA.
 """
 
-from jsonschema import validate, ValidationError
+from jsonschema import validate
 
 ALERT_SCHEMA = {
     "type": "object",

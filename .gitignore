@@ -13,3 +13,14 @@ data/raw/
 # IDE
 .vscode/
 .idea/
+
+# Generated benchmark data (regenerated via CLI — do not commit)
+data/generated/
+
+# Coverage and test caches
+.coverage
+.pytest_cache/
+.ruff_cache/
+
+# Planning artifacts
+.planning/
