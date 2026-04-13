@@ -108,7 +108,7 @@ Plans:
 - [x] **Phase 11: Schema v3** - Extend schema with new tracks, relax required fields for visual tracks, add _meta v3 fields, pin seed-42 regression hash (completed 2026-04-13)
 - [x] **Phase 12: Visual-Only Scenarios** - Build VisualOnlyGenerator with UCF Crime-based GT derivation and leakage-safe field population (completed 2026-04-13)
 - [x] **Phase 13: Contradictory Scenarios** - Build ContradictoryGenerator with video-derived GT, dual GT storage, and contradictory description pools (completed 2026-04-13)
-- [ ] **Phase 14: Temporal Sequences** - Build TemporalSequenceGenerator with escalation narrative patterns and sequence threading
+- [x] **Phase 14: Temporal Sequences** - Build TemporalSequenceGenerator with escalation narrative patterns and sequence threading (completed 2026-04-13)
 - [ ] **Phase 15: Scoring Updates** - Add track partitioning, score_sequences(), and perception-reasoning gap metric without modifying score_run()
 - [ ] **Phase 16: CLI Extensions** - Extend --track choices and add score-sequences, analyze-frame-gap subcommands
 - [ ] **Phase 17: Evaluation Protocol** - Write docs/EVALUATION_PROTOCOL.md documenting GT definitions, scoring protocol, and frame extraction baseline
@@ -172,7 +172,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 14-01-PLAN.md — Implement TemporalSequenceGenerator with isolated RNG, sequence threading, and all three escalation pattern types
+- [x] 14-01-PLAN.md — Implement TemporalSequenceGenerator with isolated RNG, sequence threading, and all three escalation pattern types
 
 ### Phase 15: Scoring Updates
 **Goal**: The scoring dashboard partitions results by track, score_sequences() measures sequence evaluation metrics, and the perception-reasoning gap is computable — all without modifying score_run()
@@ -229,7 +229,7 @@ Plans:
 | 11. Schema v3 | v3.0 | 2/2 | Complete    | 2026-04-13 |
 | 12. Visual-Only Scenarios | v3.0 | 1/1 | Complete    | 2026-04-13 |
 | 13. Contradictory Scenarios | v3.0 | 2/2 | Complete    | 2026-04-13 |
-| 14. Temporal Sequences | v3.0 | 0/1 | Not started | - |
+| 14. Temporal Sequences | v3.0 | 1/1 | Complete    | 2026-04-13 |
 | 15. Scoring Updates | v3.0 | 0/2 | Not started | - |
 | 16. CLI Extensions | v3.0 | 0/1 | Not started | - |
 | 17. Evaluation Protocol | v3.0 | 0/1 | Not started | - |
