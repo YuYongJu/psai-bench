@@ -47,9 +47,9 @@ Plans:
   4. `python -c "import psai_bench; print(psai_bench.__version__)"` returns a valid semver string
 **Plans**: 3 plans
 Plans:
-- [ ] 09-01-PLAN.md — Simplify OUTPUT_SCHEMA and update validation logic
-- [ ] 09-02-PLAN.md — Scoring engine: ambiguous partition, Decisiveness, new aggregate, format_dashboard
-- [ ] 09-03-PLAN.md — Wire dashboard to CLI, delete stale commands, update tests
+- [x] 09-01-PLAN.md — Simplify OUTPUT_SCHEMA and update validation logic
+- [x] 09-02-PLAN.md — Scoring engine: ambiguous partition, Decisiveness, new aggregate, format_dashboard
+- [x] 09-03-PLAN.md — Wire dashboard to CLI, delete stale commands, update tests
 
 ### Phase 3: Test Coverage Expansion
 **Goal**: The test suite covers CLI commands and the statistics module at meaningful levels, and CI will not break on a clean environment due to missing generated data
@@ -62,9 +62,9 @@ Plans:
   4. NumPy version constraint and reproducibility note are documented in pyproject.toml or a REPRODUCIBILITY note
 **Plans**: 3 plans
 Plans:
-- [ ] 09-01-PLAN.md — Simplify OUTPUT_SCHEMA and update validation logic
-- [ ] 09-02-PLAN.md — Scoring engine: ambiguous partition, Decisiveness, new aggregate, format_dashboard
-- [ ] 09-03-PLAN.md — Wire dashboard to CLI, delete stale commands, update tests
+- [x] 09-01-PLAN.md — Simplify OUTPUT_SCHEMA and update validation logic
+- [x] 09-02-PLAN.md — Scoring engine: ambiguous partition, Decisiveness, new aggregate, format_dashboard
+- [x] 09-03-PLAN.md — Wire dashboard to CLI, delete stale commands, update tests
 
 ### Phase 4: GitHub Actions CI
 **Goal**: Every push and pull request automatically runs the full test suite across Python 3.10/3.11/3.12 and produces a green badge
