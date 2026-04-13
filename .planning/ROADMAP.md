@@ -112,7 +112,7 @@ Plans:
 - [x] **Phase 19: Scoring Pipeline and Baselines** - Add dispatch scoring function, extend dashboard, update all baselines (completed 2026-04-13)
 - [x] **Phase 20: Adversarial v4 Generator** - Implement behavioral adversarial scenarios with isolated RNG and separate description pools (completed 2026-04-13)
 - [x] **Phase 21: Multi-Site Generalization** - Add site-type filtering, leakage audit, and generalization gap metric (completed 2026-04-13)
-- [ ] **Phase 22: CLI Integration, Tests, and Documentation** - Wire all new commands, verify 100% backward compatibility, complete test suite
+- [x] **Phase 22: CLI Integration, Tests, and Documentation** - Wire all new commands, verify 100% backward compatibility, complete test suite (completed 2026-04-13)
 
 ## Phase Details
 
@@ -183,8 +183,8 @@ Plans:
   4. `EVALUATION_PROTOCOL.md` documents dispatch scoring, the cost model, configurable cost profiles, and the multi-site generalization protocol with the leakage audit results
 **Plans**: 2 plans
 Plans:
-- [ ] 22-01-PLAN.md — E2E integration tests + backward compat tests (TEST-01 through TEST-05)
-- [ ] 22-02-PLAN.md — EVALUATION_PROTOCOL.md v4.0 additions (DOC-02)
+- [x] 22-01-PLAN.md — E2E integration tests + backward compat tests (TEST-01 through TEST-05)
+- [x] 22-02-PLAN.md — EVALUATION_PROTOCOL.md v4.0 additions (DOC-02)
 
 ## Progress Table
 
@@ -194,4 +194,4 @@ Plans:
 | 19. Scoring Pipeline and Baselines | 2/2 | Complete    | 2026-04-13 |
 | 20. Adversarial v4 Generator | 2/2 | Complete    | 2026-04-13 |
 | 21. Multi-Site Generalization | 2/2 | Complete    | 2026-04-13 |
-| 22. CLI Integration, Tests, and Documentation | 0/2 | Not started | - |
+| 22. CLI Integration, Tests, and Documentation | 2/2 | Complete    | 2026-04-13 |
