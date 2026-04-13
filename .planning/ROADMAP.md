@@ -45,7 +45,11 @@ Plans:
   2. `pip show psai-bench` returns Author, Home-page, and Classifier fields (not empty)
   3. `pre-commit run --all-files` exits 0 (ruff-check and ruff-format hooks both pass)
   4. `python -c "import psai_bench; print(psai_bench.__version__)"` returns a valid semver string
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 09-01-PLAN.md — Simplify OUTPUT_SCHEMA and update validation logic
+- [ ] 09-02-PLAN.md — Scoring engine: ambiguous partition, Decisiveness, new aggregate, format_dashboard
+- [ ] 09-03-PLAN.md — Wire dashboard to CLI, delete stale commands, update tests
 
 ### Phase 3: Test Coverage Expansion
 **Goal**: The test suite covers CLI commands and the statistics module at meaningful levels, and CI will not break on a clean environment due to missing generated data
@@ -56,7 +60,11 @@ Plans:
   2. `pytest --cov=psai_bench --cov-report=term-missing` shows statistics module coverage above 80%
   3. All 67 existing tests continue to pass after new tests are added
   4. NumPy version constraint and reproducibility note are documented in pyproject.toml or a REPRODUCIBILITY note
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 09-01-PLAN.md — Simplify OUTPUT_SCHEMA and update validation logic
+- [ ] 09-02-PLAN.md — Scoring engine: ambiguous partition, Decisiveness, new aggregate, format_dashboard
+- [ ] 09-03-PLAN.md — Wire dashboard to CLI, delete stale commands, update tests
 
 ### Phase 4: GitHub Actions CI
 **Goal**: Every push and pull request automatically runs the full test suite across Python 3.10/3.11/3.12 and produces a green badge
@@ -67,7 +75,11 @@ Plans:
   2. The Actions tab shows a green check on the latest commit across all three Python version matrix entries
   3. A codecov coverage report is uploaded and a badge URL is available for use in the README
   4. `ruff check .` and `pytest` both run as separate CI steps without failures
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 09-01-PLAN.md — Simplify OUTPUT_SCHEMA and update validation logic
+- [ ] 09-02-PLAN.md — Scoring engine: ambiguous partition, Decisiveness, new aggregate, format_dashboard
+- [ ] 09-03-PLAN.md — Wire dashboard to CLI, delete stale commands, update tests
 
 ### Phase 5: Documentation + Release
 **Goal**: PSAI-Bench is publicly presentable — a researcher landing on the repo immediately understands the research contribution, can reproduce results, and can cite the work
@@ -146,7 +158,11 @@ Plans:
   3. If an aggregate score is shown, its formula is printed alongside it with documented weights
   4. `psai-bench score` does not penalize a system that gives THREAT or BENIGN on a scenario flagged as ambiguous — the scoring output shows ambiguous scenarios handled in a separate bucket
   5. A minimal output file containing only `alert_id`, `verdict`, and `confidence` passes schema validation without errors
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 09-01-PLAN.md — Simplify OUTPUT_SCHEMA and update validation logic
+- [ ] 09-02-PLAN.md — Scoring engine: ambiguous partition, Decisiveness, new aggregate, format_dashboard
+- [ ] 09-03-PLAN.md — Wire dashboard to CLI, delete stale commands, update tests
 
 ### Phase 10: Documentation and Release
 **Goal**: The repository communicates the BYOS workflow as the primary path, built-in evaluators are correctly positioned as examples, v2.0 results are accurately represented, and known limitations are honest
