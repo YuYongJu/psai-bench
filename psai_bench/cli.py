@@ -85,10 +85,10 @@ def generate(track: str, source: str, n: int | None, seed: int, output: str, gen
         scenarios = ContradictoryGenerator(seed=seed).generate(count)
         click.echo(f"Generated {count} visual-contradictory scenarios")
     elif track == "temporal":
-        raise click.UsageError(
-            "temporal track generator is not yet implemented (ships in Phase 14). "
-            "Use --track metadata or --track visual for now."
-        )
+        from psai_bench.generators import TemporalSequenceGenerator
+        count = n or 50
+        scenarios = TemporalSequenceGenerator(seed=seed).generate(count)
+        click.echo(f"Generated {count} temporal sequences ({len(scenarios)} total alerts)")
 
     version_suffix = f"_{gen_version}" if gen_version != "v1" else ""
     out_file = out_dir / f"{track}_{source}_seed{seed}{version_suffix}.json"
