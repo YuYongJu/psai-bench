@@ -1,182 +1,250 @@
-# Stack Research
+# Technology Stack — v3.0 Visual Track Additions
 
-**Domain:** Open-source Python benchmark/CLI tool — GitHub publication packaging
-**Researched:** 2026-04-12
-**Confidence:** HIGH (versions verified against PyPI and GitHub releases)
+**Project:** PSAI-Bench v3.0 (Perception-Reasoning Gap milestone)
+**Researched:** 2026-04-13
+**Scope:** Stack additions for visual-only scenarios, contradictory scenarios, temporal sequences, frame extraction baseline
 
-## Recommended Stack
+---
 
-### Core Technologies (additions to existing stack)
+## Critical Framing
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| ruff | `>=0.8,<1.0` | Lint + format (replaces flake8, black, isort) | Already in dev deps but pinned too loosely (`>=0.1`). Ruff is the standard for new Python projects — single tool for lint and format. Current: 0.15.10. |
-| GitHub Actions | — | CI matrix across Python 3.10/3.11/3.12 | Native GitHub integration, free for public repos, zero infrastructure. The matrix replaces tox/nox entirely. |
-| codecov-action | `v5` | Coverage badge + PR diff annotations | v5 is current stable; public repos can opt out of token requirement. Gives the coverage badge without managing a separate service. |
-| pre-commit | `>=3.5` | Enforce ruff on commit for contributors | Two hooks (`ruff-check`, `ruff-format`), zero contributor friction. Keeps PRs clean before CI runs. |
+PSAI-Bench generates scenarios and scores outputs. It does NOT process video in its main path. The evaluated system (user-provided) processes video. This shapes every dependency decision below:
 
-### Supporting Libraries (already in pyproject.toml, version notes only)
+- **Visual-only scenarios, contradictory scenarios, temporal alert sequences:** Zero new dependencies. All three are generator code additions — new fields in alert dicts, new distributions data, new scoring partitions. Existing numpy handles everything.
+- **Frame extraction baseline:** The only feature that touches actual video bytes. Must be an optional dependency group, not a core requirement.
+- **Scoring updates for new tracks:** Pure numpy/scipy. No new libraries.
 
-| Library | Current Pin | Recommendation | Notes |
-|---------|-------------|---------------|-------|
-| pytest | `>=7.0` | `>=7.4` | 7.4 fixes several fixture edge cases; 8.x is stable but 7.4 is safer for broad compat |
-| pytest-cov | `>=4.0` | keep | Fine as-is |
-| numpy | `>=1.24` | keep | Fine for Python 3.10+ floor |
-| pandas | `>=2.0` | keep | Fine |
-| setuptools | `>=68` (build) | keep | Still the right build backend for this project size; no reason to switch to hatchling |
+The existing constraint from PROJECT.md — "No new dependencies unless strictly needed for scenario generation" — holds for three of four features. Frame extraction is a baseline, not generation. It gets its own install group.
 
-### Development Tools
+---
 
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| `actions/checkout` | CI: checkout code | Pin to `@v4` |
-| `actions/setup-python` | CI: install Python matrix | Pin to `@v5` |
-| `codecov/codecov-action` | CI: upload coverage report | Pin to `@v5`; no token needed for public repos (opt-out enabled) |
-| shields.io | Static badges in README | No account needed, generates SVG badges from URL parameters |
+## What Is Already Sufficient (Do Not Change)
 
-## Installation
+| Library | Current Pin | Covers |
+|---------|-------------|--------|
+| numpy >= 1.24 | core dep | All new generators, scoring partitions, temporal sequence math |
+| click >= 8.0 | core dep | CLI extensions for new generator subcommands |
+| jsonschema >= 4.0 | core dep | Schema validation for new alert dict fields (additive only) |
+| anthropic >= 0.40 | `[api]` optional | Vision LLM image description calls in frame extraction baseline |
+| openai >= 1.0 | `[api]` optional | Vision LLM image description calls in frame extraction baseline |
+| google-genai >= 1.0 | `[api]` optional | Vision LLM image description calls in frame extraction baseline |
 
-```bash
-# Update dev extras in pyproject.toml (see pyproject.toml changes below)
-pip install -e ".[dev]"
+The `[api]` optional group already covers the vision LLM calls needed for the frame extraction baseline (extract keyframe → base64-encode → pass to vision API → get scene description → score as metadata). No additions to that group.
 
-# Install pre-commit hooks (one-time per dev machine)
-pip install pre-commit
-pre-commit install
-```
+---
 
-## pyproject.toml Changes Needed
+## New Optional Dependency: Frame Extraction Baseline
+
+### Decision: opencv-python-headless >= 4.10
+
+**Current version:** 4.13.0.92 (released 2026-02-05, actively maintained by opencv org)
+
+**Add to:** New `[visual]` optional dependency group in pyproject.toml
 
 ```toml
-# 1. Fix readme to point to file (currently inline text)
-readme = "README.md"
-
-# 2. Add authors and URLs
-authors = [
-    {name = "Your Name", email = "you@example.com"}
-]
-[project.urls]
-Homepage = "https://github.com/YuYongJu/psai-bench"
-Repository = "https://github.com/YuYongJu/psai-bench"
-Issues = "https://github.com/YuYongJu/psai-bench/issues"
-
-# 3. Add PyPI classifiers
-classifiers = [
-    "Development Status :: 5 - Production/Stable",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-]
-
-# 4. Tighten ruff pin in dev extras
 [project.optional-dependencies]
-dev = [
-    "pytest>=7.4",
-    "pytest-cov>=4.0",
-    "ruff>=0.8",
-    "pre-commit>=3.5",
+visual = [
+    "opencv-python-headless>=4.10",
 ]
-
-# 5. Add ruff lint config (currently only line-length is set)
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP", "W"]
-# E = pycodestyle errors, F = pyflakes, I = isort, UP = pyupgrade, W = warnings
 ```
 
-## GitHub Actions Workflow
-
-`.github/workflows/ci.yml`:
-
-```yaml
-name: CI
-on: [push, pull_request]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - run: pip install -e ".[dev]"
-      - run: ruff check .
-      - run: ruff format --check .
-      - run: pytest --cov=psai_bench --cov-report=xml
-      - uses: codecov/codecov-action@v5
-        if: matrix.python-version == '3.12'   # upload once, not 3x
-        with:
-          files: ./coverage.xml
+**Install for frame extraction baseline:**
+```bash
+pip install "psai-bench[visual,api]"
 ```
 
-## pre-commit Config
+### Why opencv-python-headless
 
-`.pre-commit-config.yaml`:
+**Rejected: decord (dmlc/decord)**
+Last PyPI release: 0.6.0, June 14, 2021. Maintenance marked inactive (Snyk package health). 198 open GitHub issues with no recent resolution. Confirmed does not publish wheels for Python 3.12+. The CI matrix already targets Python 3.10/3.11/3.12 — decord breaks this immediately.
 
-```yaml
-repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.10
-    hooks:
-      - id: ruff-check
-        args: [--fix]
-      - id: ruff-format
+**Rejected: decord2 (active fork)**
+Releases through April 2026, but single-maintainer fork of an abandoned upstream. Inappropriate for a reproducibility-focused benchmark that must be installable across Python versions without build-time failures.
+
+**Rejected: ffmpeg via subprocess**
+Requires the `ffmpeg` system binary. Cannot be declared as a pip dependency — `pip install psai-bench[visual]` would silently miss it. Breaks portability across contributor machines and CI. A hidden system dependency is worse than a heavier Python wheel.
+
+**opencv-python-headless rationale:**
+- Ships its own ffmpeg (LGPL wheel), no system binaries needed
+- Pre-built wheels for Python 3.7–3.13 confirmed on PyPI as of 2026-02-05
+- The `-headless` variant has no X11/GUI dependencies — correct for server/CI use
+- `VideoCapture` is sufficient for uniform-interval keyframe sampling (the correct baseline design — sample every N seconds, not semantically)
+- Actively maintained under the official opencv organization
+
+**What it does in the baseline:**
+
+```python
+import cv2, base64
+
+cap = cv2.VideoCapture(video_path)
+fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+interval_frames = int(fps * keyframe_interval_sec)  # e.g., every 5 seconds
+
+frames = []
+frame_idx = 0
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
+    if frame_idx % interval_frames == 0:
+        _, buf = cv2.imencode(".jpg", frame)
+        frames.append(base64.b64encode(buf).decode())
+    frame_idx += 1
+cap.release()
+# frames -> vision LLM via existing [api] group -> description -> metadata-track scorer
 ```
 
-## README Badges
+---
 
-```markdown
-[![CI](https://github.com/YuYongJu/psai-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/YuYongJu/psai-bench/actions)
-[![codecov](https://codecov.io/gh/YuYongJu/psai-bench/branch/main/graph/badge.svg)](https://codecov.io/gh/YuYongJu/psai-bench)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/psai-bench)](https://pypi.org/project/psai-bench/)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+## Generator Extensions — No New Libraries
+
+All three new scenario types are implemented as additions to `generators.py` and `distributions.py`. Existing numpy RNG and dict construction handle all logic.
+
+### Visual-Only Scenarios
+
+New generator method (`generate_visual_only`) or flag on existing `VisualGenerator`. Alert dict changes:
+
+```python
+s["track"] = "visual_only"  # new track value
+s["visual_data"]["visual_only"] = True  # new flag on existing dict
+s["visual_data"]["stripped_fields"] = ["description", "severity", "zone"]
+
+# Sentinel values to catch accidental metadata use
+s["description"] = "NO_DESCRIPTION_VISUAL_ONLY_TRACK"
+s["severity"] = "UNSET"
+s["zone"]["type"] = "UNSET"
+s["zone"]["sensitivity"] = -1
 ```
 
-Note: PyPI version badge only relevant if publishing to PyPI. The Python version and license badges work with shields.io static parameters without PyPI publication.
+Ground truth uses the same `assign_ground_truth_v2` from `distributions.py`, driven by video content signals stored in `_meta`. The test system must read the video; the scoring system reads `_meta.ground_truth` as always.
 
-## Alternatives Considered
+### Contradictory Scenarios
 
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| ruff (lint + format) | black + flake8 + isort | Never for new projects; ruff subsumes all three faster |
-| GitHub Actions matrix | tox / nox | When you need local multi-version testing; for CI-only, GHA matrix is sufficient |
-| codecov | coveralls | If already using coveralls ecosystem; codecov is more feature-rich for public repos |
-| setuptools | hatchling | For new projects without existing setuptools config; not worth migrating here |
-| README-only docs | mkdocs / sphinx | When building an API library with many public functions; benchmark CLI doesn't need it |
+Extension of existing adversarial injection. The contradiction is declared at generation time — no runtime video parsing.
+
+New data in `distributions.py`:
+- `CONTRADICTION_PAIRS`: list of `(metadata_description, video_scene_label, correct_verdict)` tuples. Plain Python list.
+- `VIDEO_SCENE_DESCRIPTIONS`: pool of video-content descriptions for the contradiction field. Plain Python list.
+
+New `_meta` fields:
+```python
+"_meta": {
+    ...
+    "contradiction_type": "video_overrides_metadata",
+    "declared_contradiction": {
+        "metadata_signal": "routine_activity",
+        "video_signal": "fence_cutting",
+        "correct_source": "video",
+    },
+    "generation_version": "v3",
+}
+```
+
+### Temporal Alert Sequences
+
+Groups of 3–5 alerts sharing a `sequence_id`. Each alert is a normal alert dict with additional `_meta` fields. Timestamps are generated using existing `_generate_timestamp` with constrained offsets (5–15 minute gaps between sequence members, using existing numpy RNG).
+
+New `_meta` fields:
+```python
+"sequence_id": "seq-00042",
+"sequence_position": 2,       # 0-indexed
+"sequence_length": 4,
+"escalation_pattern": "rising",  # rising | falling | spike | stable
+```
+
+`sequence_id` is the grouping key for both generation and scoring. No new data structures beyond the fields above.
+
+---
+
+## Scoring Extensions — No New Libraries
+
+Three new partitions added to `scorer.py`, all using existing numpy array operations:
+
+| New Metric | What It Measures | Implementation Note |
+|------------|-----------------|---------------------|
+| `visual_only_accuracy` | Accuracy on `track == "visual_only"` scenarios | Filter by track value, pass to existing `_score_partition` |
+| `contradiction_override_rate` | Fraction of contradictory scenarios where system chose the video-correct verdict | Read `_meta.declared_contradiction.correct_source`, compare to prediction |
+| `temporal_coherence_score` | Fraction of sequences where escalation verdicts match declared `escalation_pattern` | Group by `sequence_id`, check verdict ordering within each group |
+
+`ScoreReport` dataclass: three new float fields (backward-compatible via Python dataclass defaults). `format_dashboard` gets three new display lines. No existing fields change — all v1/v2 tests remain valid.
+
+---
+
+## Schema Changes — No New Libraries
+
+All changes are additive. jsonschema handles them via `additionalProperties: false` relaxation on optional object keys (or `additionalProperties: true` in existing schema — check `schema.py`).
+
+New optional fields:
+- `visual_data.visual_only` (boolean)
+- `visual_data.stripped_fields` (array of strings)
+- `_meta.sequence_id` (string)
+- `_meta.sequence_position` (integer)
+- `_meta.sequence_length` (integer)
+- `_meta.escalation_pattern` (string, enum: rising/falling/spike/stable)
+- `_meta.contradiction_type` (string, enum: video_overrides_metadata/metadata_overrides_video)
+- `_meta.declared_contradiction` (object with metadata_signal, video_signal, correct_source)
+- `_meta.generation_version` (string — already exists in v2 scenarios)
+
+All `required` lists in schema.py remain unchanged. Backward-compatible with v1/v2 scenarios.
+
+---
 
 ## What NOT to Add
 
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| mypy / pyright | numpy/pandas type stubs are painful; research code has dynamic patterns that generate false positives; ROI is low for a benchmark tool | ruff's UP rules catch real modernization issues without type annotation overhead |
-| tox / nox | Adds a dependency and config layer that GHA matrix already handles | GitHub Actions matrix with `python-version: ["3.10", "3.11", "3.12"]` |
-| sphinx / mkdocs / readthedocs | Over-engineering for a CLI benchmark; docs sites require ongoing maintenance | Comprehensive README with results table, quickstart, and citation block |
-| semantic-release / commitizen | Automated changelog tooling adds friction for a single-author research tool | Manual version bumps in pyproject.toml + hand-written CHANGELOG.md |
-| Docker | pip install is the correct distribution for a benchmark tool | `pip install psai-bench` or `pip install -e .` |
-| PyPI publish action | Project scope is GitHub publication, not PyPI distribution | Ship the wheel/sdist manually if needed; don't automate until there's demand |
-| dependabot (Python) | Dependency PRs for a research benchmark create noise without value | Pin ranges in pyproject.toml, update manually at milestone boundaries |
+| Library | Why Not |
+|---------|---------|
+| decord | Abandoned since 2021, no Python 3.12 wheels, 198 open issues |
+| decord2 | Single-maintainer fork; portability risk across CI Python matrix |
+| imageio / imageio-ffmpeg | Downloads ffmpeg binary at runtime — same hidden system dependency problem as subprocess |
+| Pillow | Not needed — cv2.imencode handles frame-to-JPEG-bytes for base64 encoding |
+| torch / torchvision | Massive dependency; inappropriate for a benchmark tool; not needed for uniform sampling |
+| PyAV (av) | Requires system libav/libavcodec build; complex install; overkill for uniform frame sampling |
+| scenedetect | Semantic keyframe detection is wrong for this baseline by design — uniform interval is the correct baseline |
+| pydantic | Already using jsonschema; adding a second validation layer creates inconsistency |
+| Any new LLM library | Existing `[api]` group covers anthropic + openai + google-genai for vision calls |
+| scipy (new) | Already transitively available via scikit-learn; no direct import needed |
 
-## Version Compatibility
+---
 
-| Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| ruff 0.15.x | Python 3.10–3.12 | Ruff itself runs on any Python; rules target the project's floor |
-| pytest 7.4+ | Python 3.10–3.12 | pytest 8.x also works; 7.4 is safer if contributors have older toolchains |
-| codecov-action v5 | GitHub Actions runner (ubuntu-latest) | v6 requires node24, planned but not yet released; v5 is stable |
+## Updated pyproject.toml (v3.0 diff)
+
+```toml
+# Add new optional group
+[project.optional-dependencies]
+visual = [
+    "opencv-python-headless>=4.10",
+]
+
+# Existing groups unchanged:
+# dev = [pytest>=7.0, pytest-cov>=4.0, ruff>=0.8]
+# api = [anthropic>=0.40, openai>=1.0, google-genai>=1.0]
+```
+
+---
+
+## Confidence Assessment
+
+| Area | Confidence | Notes |
+|------|------------|-------|
+| "No new deps for generators/scoring" | HIGH | Verifiable directly from existing codebase — all logic is dict manipulation and numpy operations |
+| opencv-python-headless choice | HIGH | PyPI confirms 4.13.0.92 released 2026-02-05; actively maintained; correct for headless server use |
+| decord original abandonment | HIGH | Last PyPI release June 2021 confirmed; Snyk marks maintenance inactive |
+| decord2 instability | MEDIUM | Active on PyPI through April 2026 but single-maintainer fork; portability risk not worth taking |
+| ffmpeg subprocess rejection | HIGH | System binary requirement breaks portable pip install — confirmed problem for cross-platform CI |
+| Scoring extensions in pure numpy | HIGH | All proposed metrics are array slicing and partitioning; existing `_score_partition` pattern already handles this |
+| Schema additive compatibility | HIGH | Python dataclass field defaults provide backward compat; confirmed by existing v1→v2 migration pattern |
+
+---
 
 ## Sources
 
-- [ruff PyPI page](https://pypi.org/project/ruff/) — version 0.15.10 confirmed current (April 9, 2026)
-- [astral-sh/ruff-pre-commit](https://github.com/astral-sh/ruff-pre-commit) — pre-commit hook rev v0.15.10 confirmed
-- [codecov/codecov-action GitHub](https://github.com/codecov/codecov-action) — v5 confirmed current stable; v6 (node24) planned but not released
-- [GitHub Marketplace: codecov-action](https://github.com/marketplace/actions/codecov) — public repo token opt-out confirmed in v5
+- [opencv-python-headless PyPI](https://pypi.org/project/opencv-python-headless/) — version 4.13.0.92, released 2026-02-05
+- [decord PyPI](https://pypi.org/project/decord/) — version 0.6.0, last released June 2021
+- [Snyk decord health](https://snyk.io/advisor/python/decord) — maintenance status: Inactive
+- [decord GitHub](https://github.com/dmlc/decord) — 198 open issues; no recent releases
+- [decord2 PyPI](https://pypi.org/project/decord2/) — active fork, v3.3.0 released April 2026
+- [Towards Data Science: Lightning Fast Video Reading](https://towardsdatascience.com/lightning-fast-video-reading-in-python-c1438771c4e6/) — performance comparison confirming decord speed advantage (moot given maintenance status)
 
 ---
-*Stack research for: PSAI-Bench open-source release packaging*
-*Researched: 2026-04-12*
+*Stack research for: PSAI-Bench v3.0 visual track additions*
+*Researched: 2026-04-13*

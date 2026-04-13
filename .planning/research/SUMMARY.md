@@ -1,174 +1,212 @@
 # Project Research Summary
 
-**Project:** PSAI-Bench
-**Domain:** Open-source Python ML benchmark — GitHub release packaging
-**Researched:** 2026-04-12
+**Project:** PSAI-Bench v3.0 — Perception-Reasoning Gap milestone
+**Domain:** Physical security AI benchmark — visual, contradictory, and temporal scenario additions
+**Researched:** 2026-04-13
 **Confidence:** HIGH
 
 ## Executive Summary
 
-PSAI-Bench is a complete, implemented benchmark for evaluating frontier AI models in physical security scenarios. The benchmark core (CLI, scorer, generators, evaluators, baselines, statistics) is finished at v1.0rc1. The work remaining is entirely a release packaging problem: add the documentation, CI infrastructure, metadata, and repository hygiene required for a credible public GitHub release. No new benchmark logic needs to be written.
+PSAI-Bench v3.0 adds three scenario tracks to an existing benchmark that ships 133 passing tests, strict seed reproducibility, and a BYOS (bring-your-own-system) evaluation contract. The benchmark generates structured scenario data; it does not process video. This constraint is the load-bearing design principle for every decision below. Visual-only scenarios, contradictory scenarios, and temporal sequences are all generator additions — new fields in alert dicts, new distributions data, new scoring partitions — with no video processing in the benchmark itself. The only feature that touches actual video bytes is the frame extraction baseline, which is rearchitected as an evaluation protocol (not benchmark code) based on direct inspection of baselines.py.
 
-The recommended approach follows the pattern of well-maintained Python ML benchmarks (SWE-bench, MMLU, MLE-bench): comprehensive README with results table and citation block, clean GitHub Actions CI with a test matrix, Apache-2.0 LICENSE file, a small set of community files (CONTRIBUTING.md, CODE_OF_CONDUCT.md), and pyproject.toml metadata completed for public distribution. The entire release scope is low-complexity work — the highest-complexity item (GitHub Actions CI) is medium complexity, and everything else is low. Total scope is 10 discrete artifacts.
+The recommended approach is purely additive: extend schema.py first (enables all downstream work), then build generators for each new track in dependency order, then add scoring, CLI, and documentation. All schema additions are backward-compatible — removing fields from `required` never invalidates existing scenarios, and new `_meta` fields are optional by convention. The existing `score_run()` function is the benchmark's scoring contract and must not be modified; temporal sequence scoring ships as a new `score_sequences()` function alongside it. The only new dependency is `opencv-python-headless >= 4.10` in a new `[visual]` optional extras group — everything else (generators, scoring, schema, CLI) uses existing numpy, click, and jsonschema.
 
-The primary risks are repo hygiene issues that must be resolved before any public push: 16MB of generated JSON files embedded in git history (requires git-filter-repo rewrite), 12 ruff lint errors that block a green CI badge, and a numpy version pin gap that could break benchmark reproducibility across library versions. Sequence matters — history rewrite and lint fixes must precede CI, and CI must pass before the README badges go live. Execute in dependency order and the risks are fully preventable.
+The primary risk is metadata leakage in visual-only scenarios. Three different approaches appear across the research files, and only one passes the existing `test_leakage.py` test. STACK.md recommends sentinel values (`"NO_DESCRIPTION_VISUAL_ONLY_TRACK"`); ARCHITECTURE.md recommends null fields (schema optional); PITFALLS.md demonstrates that both are trivially detectable by the depth-1 stump the leakage test uses. The correct approach is to populate required fields from the existing shared description pools so the leakage test on the visual-only subset does not fail. This conflict between research files must be resolved at schema design time — before any generator code is written.
+
+---
 
 ## Key Findings
 
-### Recommended Stack
+### Stack: Minimal Additions Required
 
-The existing stack (Python 3.10+, pytest, numpy, pandas, setuptools) is sound and requires minimal changes. The only tooling additions needed are ruff (tighten pin from >=0.1 to >=0.8), GitHub Actions CI (replacing the absent test automation), codecov-action v5 for coverage badge, and pre-commit with ruff hooks. Explicitly excluded: mypy/pyright (high false-positive rate with numpy/pandas), tox/nox (GHA matrix subsumes this), sphinx/mkdocs (over-engineering for a CLI benchmark), Docker (unnecessary — no untrusted code execution), and automated PyPI publishing (out of scope for v1.0).
+Three of four v3.0 features require zero new dependencies. Visual-only, contradictory, and temporal scenarios are pure generator additions using existing numpy for RNG, jsonschema for validation, and click for CLI. The frame extraction baseline is reclassified as an evaluation protocol — users run it themselves, the benchmark scores outputs — eliminating the dependency concern for the benchmark itself. If a benchmark-internal frame extraction tool is ever added, it uses `opencv-python-headless >= 4.10` in a new `[visual]` optional group.
 
-**Core technologies:**
-- ruff >=0.8: lint + format — single tool replacing black/flake8/isort, already partially configured
-- GitHub Actions matrix (3.10/3.11/3.12): CI — native, free for public repos, no infrastructure overhead
-- codecov-action v5: coverage badge — public repos can opt out of token requirement
-- pre-commit >=3.5: contributor lint enforcement — two hooks, zero friction
+**Core technologies (unchanged):**
+- numpy >= 1.24: all generator RNG, scoring partitions, temporal sequence math
+- click >= 8.0: CLI extensions for new generator subcommands
+- jsonschema >= 4.0: schema validation for additive alert dict fields
+- anthropic / openai / google-genai: already in `[api]` optional group for vision LLM calls
 
-### Expected Features
+**New optional dependency:**
+- `opencv-python-headless >= 4.10` in new `[visual]` group — frame extraction only, ships own ffmpeg, headless CI-safe, Python 3.7–3.13 wheels confirmed on PyPI
 
-The benchmark functionality is complete. Every "feature" for v1.0 is a release artifact. Research against HumanEval, SWE-bench, MMLU, BIG-bench, MLE-bench, and MTEB establishes what researchers expect in a credible benchmark before citing or extending it.
+**Rejected and why:** decord (abandoned June 2021, no Python 3.12 wheels), decord2 (single-maintainer fork), ffmpeg subprocess (hidden system dependency breaks portable pip install), Pillow (cv2.imencode handles frame encoding), PyAV (requires system libav build), scenedetect (semantic selection is wrong for the baseline by design).
+
+### Features: Table Stakes and Complexity
 
 **Must have (table stakes):**
-- README with results table, quickstart, scenario track comparison, methodology note, dataset provenance, citation block — the single highest-value artifact; every comparable benchmark has this
-- LICENSE file (Apache-2.0 text) — legally required for OSS claims; current pyproject.toml declares the license but the file does not exist
-- GitHub Actions CI (test + lint, green badge) — signals maintained project to researchers
-- Lint-clean codebase (fix 12 ruff errors) — gates CI badge; broken lint before public release is a credibility risk
-- CONTRIBUTING.md — expected by researchers wanting to add evaluators or scenarios
-- CODE_OF_CONDUCT.md — trivial Contributor Covenant boilerplate; GitHub prompts for it
-- CHANGELOG.md — single v1.0.0 entry; signals version maturity
-- pyproject.toml metadata complete (authors, URLs, classifiers) — required for proper citation
-- .gitignore updated + git history cleaned — 16MB generated data must leave git history before public push
-- Version bump to 1.0.0 — signals stability
+- Visual-only scenario generation (MEDIUM complexity) — the visual track is decoration without it; requires schema extension and GT derivation from UCF Crime category, not metadata signals
+- Contradictory scenario flag in `_meta` (LOW complexity) — without it, BYOS users cannot filter or report per-type accuracy; results are uninterpretable
+- Frame extraction baseline (LOW complexity) — reclassified as evaluation protocol, not benchmark code; a new `analyze-frame-gap` CLI command computes the gap from two result files
+- Visual track scoring / TDR+FASR by track (LOW complexity) — partition existing `_score_partition` by track value; minor scorer extension
+- Sequence group identifier in schema (LOW-MEDIUM complexity) — `sequence_id` and `sequence_position` in `_meta`; backward-compatible optional fields
+- Sequence GT that evolves across alerts (MEDIUM complexity) — `TemporalSequenceGenerator` with escalating/de-escalating narrative arc
+- Temporal scoring (HIGH complexity) — `score_sequences()` as a separate function; most significant new component
 
-**Should have (differentiators):**
-- Pre-computed results in repo (results/) — PSAI-Bench is unique among comparable benchmarks in shipping example evaluation outputs; immediately demonstrates the tool works
-- Perception-reasoning gap analysis prominently surfaced in README — the core research contribution; GPT-4o TDR=0.999 but Aggregate=0.580 is a compelling, concrete finding
-- Safety-weighted metrics explanation — TDR/FASR/ECE have non-obvious security domain semantics; 3-4 sentence methodology note differentiates from generic accuracy benchmarks
-- Three scenario track table (metadata/visual/multi-sensor) — makes research design legible at a glance
+**Differentiators:**
+- Contradictory scenarios (MEDIUM) — no existing physical security benchmark tests visual-perception override of textual priors; primary research contribution
+- Perception-reasoning gap metric (LOW) — derived metric at scoring time comparing metadata-track vs visual-track accuracy on matched contradictory scenarios; what makes results publishable
+- Temporal escalation patterns (HIGH) — no public physical security benchmark encodes discrete alert sequences with narrative structure
+- Visual ground truth description field (LOW-MEDIUM) — `visual_data.content_description` makes visual content machine-readable without shipping video files; enables the BYOS model for visual scenarios
 
-**Defer (v2+):**
-- HuggingFace Spaces leaderboard — only justified with 5+ model evaluations
-- Expanded test coverage beyond 47% — add after CI baseline is green
-- Additional model evaluations (Claude, Gemini) — needed before a multi-column comparison table is credible
-- Jupyter notebook tutorial — only if user demand emerges
+**Defer to v2+ (anti-features confirmed):**
+- Video file bundling — incompatible with BYOS model, Apache-2.0 licensing, and GitHub constraints
+- Real video frame extraction in the benchmark — user's system's job, not the benchmark's
+- Continuous temporal scoring (VUS, range-AUC) — inappropriate for discrete alert sequences
+- Aggregate sequence score with time decay — encodes arbitrary domain assumptions, reduces transparency
 
-### Architecture Approach
+### Architecture: Build Order and Component Map
 
-The existing flat package structure (psai_bench/ at root) is correct — no src/ layout migration needed. The release adds three new layers on top of the unchanged package: a tooling layer (.github/workflows/ci.yml, .pre-commit-config.yaml), a documentation layer (README.md, LICENSE, CONTRIBUTING.md, CODE_OF_CONDUCT.md, CHANGELOG.md), and metadata changes to pyproject.toml. The module architecture is complete; the only structural changes are in data/generated/ (removed from git) and tests/ (optional expansion).
+The architecture is additive. The existing data flow (`Generator -> list[alert] -> [user's system] -> list[output] -> score_run() -> ScoreReport`) is unchanged for all v1/v2 scenarios. Three new flows are added in parallel with the existing one.
 
-**Major components:**
-1. CLI (cli.py / click) — generate to evaluate to score to compare pipeline; untested, must not require generated data files in CI
-2. Core engine (scorer.py, statistics.py, validation.py, schema.py) — safety-weighted metrics and statistical tests; tested at 67 tests, 47% coverage
-3. Data layer (distributions.py, downloader.py, video_mapper.py) — HuggingFace dataset fetch and frame extraction; partially untested
+**Critical design decisions confirmed by code inspection:**
+1. Schema must be modified first — ALERT_SCHEMA marks `severity` and `description` as required, which conflicts with visual-only scenarios that must omit them. Option A (track-aware optional fields via validation.py) is chosen over Option B (uninformative placeholders) to prevent leakage.
+2. GT assignment diverges by track — `assign_ground_truth_v2` uses metadata signals and must NOT be called for visual-only or contradictory scenarios; those must use `UCF_CATEGORY_MAP[cat]["ground_truth"]` directly.
+3. Temporal sequences break the flat-list assumption in `score_run()` — solved by a new `score_sequences()` function that does not touch `score_run`, preserving all 133 test contracts.
+4. Frame extraction is protocol, not code — `baselines.py` structure explicitly excludes API-dependent code; frame extraction goes in `docs/EVALUATION_PROTOCOL.md` and a new `analyze-frame-gap` CLI command.
 
-**Build order (dependency-constrained):**
-1. Lint fixes + .gitignore + git rm cached artifacts (unblocks CI)
-2. pyproject.toml metadata (add authors, classifiers, urls, ruff lint config)
-3. LICENSE + community files (independent, no ordering constraints)
-4. CI workflow (depends on lint-clean code and ruff config in pyproject.toml)
-5. README.md (written last — requires clean CI for badge, results/ for table)
-6. CHANGELOG.md + version bump (final gate before release commit)
+**Major components — modified:**
+- `schema.py` — extend track enum; relax required array; add `_meta` v3 fields (all optional)
+- `distributions.py` — add `CONTRADICTORY_THREAT_DESCRIPTIONS` and `CONTRADICTORY_BENIGN_DESCRIPTIONS` pools
+- `scorer.py` — add `SequenceScoreReport` dataclass and `score_sequences()` function; add track partitioning to dashboard
+- `cli.py` — extend `--track` choices; add `score-sequences` and `analyze-frame-gap` commands
+- `validation.py` — add track-aware validation (visual_only requires `visual_data.uri`; contradictory requires `_meta.contradictory = True`; temporal requires `sequence_id`)
+
+**Major components — new:**
+- `VisualOnlyGenerator` — builds directly from `VisualTrackMapper`; does NOT wrap `MetadataGenerator`; GT from UCF Crime category
+- `ContradictoryGenerator` — uses `VisualOnlyGenerator` pattern + contradictory description pools; sets `_meta.contradictory = True`; GT follows video
+- `TemporalSequenceGenerator` — generates flat list of 3-5 linked alerts with `sequence_id`, `sequence_position`, escalating timestamps; uses `assign_ground_truth_v2` per-alert (temporal track retains metadata signals)
 
 ### Critical Pitfalls
 
-1. **16MB generated JSON in git history** — must run `git filter-repo --path data/generated/ --invert-paths` and force-push before the repo is public; recovery cost is LOW now (2-commit history), HIGH after public clones exist. This is the very first action.
+1. **Metadata leakage in visual-only scenarios** — STACK.md recommends sentinel values, ARCHITECTURE.md recommends null fields; both fail `test_leakage.py` because a depth-1 stump detects the track from the description or severity field. PITFALLS.md is correct: populate required fields from the existing shared description pools drawn from the same distributions as all other tracks. Resolve this conflict at schema design time before any generator code is written.
 
-2. **NumPy RNG version drift breaks reproducibility** — numpy>=1.24 with no upper bound allows numpy 2.x, which changes the random Generator bitstream (NEP 19). Fix: pin numpy>=1.24,<3 and document the exact numpy version used for canonical v1.0 datasets. Add SHA-256 checksums for canonical JSON files to release notes.
+2. **Contradictory GT resolves from metadata, not video** — If `assign_ground_truth_v2` runs on contradictory scenarios, GT follows metadata signals and the scenario is incoherent. Contradictory scenarios must bypass the weighted-sum function and take GT directly from `UCF_CATEGORY_MAP[cat]["ground_truth"]`. Store both `metadata_derived_gt` and `video_derived_gt` in `_meta`; add a test asserting they differ for all `contradictory = True` scenarios.
 
-3. **CI broken on first run** — tests currently assume data/generated/ files exist from working tree; CI has a clean environment. Fix: ensure no test opens files in data/generated/ without a generate step, or mock file I/O in tests. Also set MPLBACKEND=Agg for headless CI.
+3. **Temporal sequences penalize correct early SUSPICIOUS responses** — Per-alert independent scoring penalizes a system that correctly returns SUSPICIOUS on alert 1 of a 5-alert escalation sequence. Keep per-alert scoring unchanged for existing tests; add `score_sequences()` as a separate scoring path. Document which metric applies to which scenario type in the evaluation protocol.
 
-4. **README explains what, not why** — technical documentation mode buries the core research contribution. Fix: open README with the perception-reasoning gap hypothesis and concrete GPT-4o numbers (TDR=0.999 but Aggregate=0.580) within the first 200 words. Put results table before installation instructions.
+4. **RNG stream coupling breaks seed reproducibility** — New generators sharing an RNG instance or importing private functions from `generators.py` shift existing call counts and break determinism tests. Each generator must own its own `np.random.RandomState(seed)`. Pin the seed-42 scenario hash regression test before touching any generator file.
 
-5. **LICENSE file absent despite license declaration** — pyproject.toml declares Apache-2.0 but the file does not exist. GitHub shows "No license", pip show returns License: UNKNOWN. Fix: first thing after git history cleanup.
+5. **Schema changes break 133 existing tests** — Adding new required fields to `ALERT_SCHEMA` invalidates all existing `_make_scenario()` fixtures. All new fields must go in `_meta` (not schema-validated) or be optional with defaults. Run the full test suite after every schema.py change before proceeding.
+
+---
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure:
+The user-specified build order is: schema → visual → contradictory → temporal → scoring → CLI → protocol. This matches the dependency graph from ARCHITECTURE.md and is confirmed correct.
 
-### Phase 1: Repository Hygiene
-**Rationale:** Three blockers must be eliminated before any public-facing work is credible: the large files in git history (irreversible once public), the 12 lint errors (block CI from ever going green), and the build artifacts tracked in git. This phase has zero dependencies and unblocks every subsequent phase.
-**Delivers:** Clean git history (<2MB), lint-passing codebase, proper .gitignore, build artifacts removed
-**Addresses:** Table stakes (clean .gitignore), lint-clean prerequisite for CI badge
-**Avoids:** Pitfall 1 (large files in history), Pitfall 3 (CI broken on first run — lint portion), Pitfall 8 (results JSON permanence — decide and act)
+### Phase 1: Schema v3
+**Rationale:** Every downstream generator and validator needs the new field definitions. Schema changes are purely additive (enum expansion, required relaxation, optional `_meta` fields) and carry the highest regression risk if done later. This phase also resolves the three-way design conflict on visual-only field handling — STACK.md (sentinels), ARCHITECTURE.md (nulls), and PITFALLS.md (shared pools) all recommend different approaches; the leakage test constraint settles it in favor of shared pools.
+**Delivers:** Extended `ALERT_SCHEMA` with new track values; relaxed required array for visual tracks; `_meta` v3 fields (visual_gt_source, contradictory, sequence_id, sequence_position, sequence_length, generation_version: v3); track-aware validation in `validation.py`
+**Addresses:** Table stakes — sequence group identifier; visual-only schema prerequisite
+**Avoids:** Pitfall 9 (schema breaks existing tests), Pitfall 1 (leakage design conflict resolved explicitly)
 
-### Phase 2: Project Metadata + Licensing
-**Rationale:** pyproject.toml completion and LICENSE file are independent of CI and README but are prerequisites for credible citation and OSS legal standing. These are fast, low-risk changes that should land before CI so the metadata is correct when CI first runs.
-**Delivers:** Complete pyproject.toml (authors, URLs, classifiers, ruff lint config), LICENSE file (Apache-2.0), version bumped to 1.0.0
-**Addresses:** Table stakes (LICENSE, pyproject.toml metadata, version bump)
-**Avoids:** Pitfall 4 (broken pip install metadata), Pitfall 5 (LICENSE absent)
+### Phase 2: Visual-Only Scenarios
+**Rationale:** Simpler than contradictory; serves as reference implementation for the visual track pattern before harder cases. Unblocked by schema phase. Does not depend on contradictory or temporal work.
+**Delivers:** `VisualOnlyGenerator` class; UCF Crime-only visual-only scenarios; GT from `UCF_CATEGORY_MAP`; `visual_gt_source = "video_category"` in `_meta`; class balance audit against UCF Crime distribution
+**Addresses:** Table stakes — visual-only scenario generation
+**Avoids:** Pitfall 4 (RNG isolation), Pitfall 6 (class imbalance — compute and document distribution), Pitfall 11 (Caltech excluded from visual-only in v3.0)
 
-### Phase 3: Community Files
-**Rationale:** CONTRIBUTING.md, CODE_OF_CONDUCT.md, and CHANGELOG.md have no dependencies and no ordering constraints among themselves. Group together as a single low-effort phase.
-**Delivers:** CONTRIBUTING.md (how to add evaluators/datasets), CODE_OF_CONDUCT.md (Contributor Covenant), CHANGELOG.md (v1.0.0 entry)
-**Addresses:** Table stakes (all three files), GitHub community profile completeness
+### Phase 3: Contradictory Scenarios
+**Rationale:** Depends on visual-only generator as reference implementation and on new description pools in `distributions.py`. The primary research contribution. Natural follow from visual-only since both use `video_category` GT.
+**Delivers:** `CONTRADICTORY_THREAT_DESCRIPTIONS` and `CONTRADICTORY_BENIGN_DESCRIPTIONS` pools in `distributions.py`; `ContradictoryGenerator` class; `_meta.contradictory = True` plus dual GT storage; test asserting `metadata_derived_gt != video_derived_gt` for all contradictory scenarios
+**Addresses:** Differentiator — contradictory scenarios (visual overrides metadata); table stakes — contradictory flag
+**Avoids:** Pitfall 2 (GT must come from video category, not metadata signals), Pitfall 7 (descriptions must be plausible-but-wrong, not obviously wrong)
 
-### Phase 4: CI Setup
-**Rationale:** CI depends on lint-clean code (Phase 1) and [tool.ruff.lint] config in pyproject.toml (Phase 2). This phase wires the GitHub Actions matrix, sets coverage threshold at current level minus 2 points (45%), uploads coverage to codecov, and verifies first green run.
-**Delivers:** .github/workflows/ci.yml, .pre-commit-config.yaml, green CI badge URL
-**Uses:** GitHub Actions matrix (3.10/3.11/3.12), ruff, pytest-cov, codecov-action v5
-**Avoids:** Pitfall 6 (CI broken on first run — data file and API key portions), Anti-Pattern 1 (installing api extras in CI), Anti-Pattern 2 (coverage threshold too high)
+### Phase 4: Temporal Sequences
+**Rationale:** Largest new component; independent of visual/contradictory work (temporal scenarios use metadata signals, not video GT). Isolated so it can slip without blocking visual track delivery. Highest implementation risk in the milestone.
+**Delivers:** `TemporalSequenceGenerator` class; sequences of 3-5 linked alerts with `sequence_id`, `sequence_position`, escalating/de-escalating GT narrative; varied escalation points (not fixed position); monotonically increasing timestamps
+**Addresses:** Table stakes — sequence GT that evolves across alerts; differentiator — temporal escalation patterns
+**Avoids:** Pitfall 3 (keep per-alert scoring unchanged), Pitfall 8 (vary escalation point; add position-stump leakage test), Pitfall 12 (timestamps must be strictly increasing)
 
-### Phase 5: README
-**Rationale:** README is written last because it depends on a passing CI run (for badge status), confirmed results/ content (for results table), and final package metadata (for install instructions). Writing it last means everything it references is real and verified.
-**Delivers:** README.md — perception-reasoning gap framing, scenario track table, results table (GPT-4o vs 4 baselines), methodology note, quickstart (install + generate + score), dataset provenance, BibTeX citation block, shields.io badges
-**Addresses:** All differentiators (gap analysis, safety metrics, track table, pre-computed results); table stakes (README, quickstart, citation, badges)
-**Avoids:** Pitfall 2 (generated data not reproducible — document exact generate invocations), Pitfall 7 (README explains what not why — open with research hypothesis and concrete numbers), Anti-Pattern 3 (pyproject readme field + README in same commit)
+### Phase 5: Scoring Updates
+**Rationale:** Scoring depends on scenarios existing to test against. Adds track partitioning, sequence scoring, and perception-reasoning gap metric without touching the existing `score_run()` contract.
+**Delivers:** Track partitioning in `_score_partition` (visual_only, visual_contradictory, temporal breakdowns in dashboard); `SequenceScoreReport` dataclass; `score_sequences()` function; perception-reasoning gap metric (derived from matched contradictory scenario comparisons)
+**Addresses:** Table stakes — visual track scoring; temporal scoring; differentiator — perception-reasoning gap metric
+**Avoids:** Pitfall 3 (score_sequences is separate from score_run; all 133 tests unchanged)
+
+### Phase 6: CLI Extensions
+**Rationale:** CLI is the last code layer; depends on generators and scoring being stable. Purely additive — no existing commands change signature.
+**Delivers:** Extended `--track` choices in `generate` command; `score-sequences` subcommand; `analyze-frame-gap` subcommand
+**Addresses:** Table stakes — frame extraction baseline (as protocol tool, not code)
+**Avoids:** Pitfall 10 (video-dir override for path remapping in analyze-frame-gap)
+
+### Phase 7: Evaluation Protocol Document
+**Rationale:** No code dependencies. Written after visual-only scenarios exist so the protocol can reference the exact scenario format and schema fields. Documents the decisions made across all prior phases.
+**Delivers:** `docs/EVALUATION_PROTOCOL.md` — GT definition for each track; frame extraction baseline specification (uniform N-frame sampling, never using `anomaly_segments` for selection, deterministic given seed); scoring protocol for sequences; cross-track comparison guidelines; Caltech scope limitation for visual-only
+**Addresses:** Differentiator — evaluation protocol document
+**Avoids:** Pitfall 5 (keyframe strategy specified precisely, never annotation-guided)
 
 ### Phase Ordering Rationale
 
-- Phase 1 (hygiene) must be first: git history rewrite is irreversible after public push; lint errors block CI from ever showing green; both are zero-dependency actions
-- Phase 2 (metadata) before CI: ruff lint config must exist in pyproject.toml before ruff check . in CI is meaningful; README field change and README.md creation must land together
-- Phase 3 (community files) can slot anywhere between 2 and 5 but groups naturally with metadata work
-- Phase 4 (CI) requires phases 1 and 2; must produce a green badge URL before README references it
-- Phase 5 (README) last: aggregates outputs from all prior phases into the project's public face
+- Schema first because it unblocks all generators and validators; doing it later risks breaking in-progress generator code
+- Visual before contradictory because contradictory builds on visual's `video_category` GT pattern; doing them together increases risk of the GT design error (Pitfall 2)
+- Temporal isolated from visual/contradictory because temporal uses metadata signals (not video GT) — the two tracks have no runtime dependency on each other, and isolation lets temporal slip without affecting the visual milestone
+- Scoring after generators because scoring tests require generated scenarios; the partition logic depends on which tracks exist
+- CLI last because it exposes what's stable; adding subcommands before scoring is done risks shipping a command that errors on the first run
+- Protocol last because it documents what was actually built, including decisions that resolve during implementation
 
 ### Research Flags
 
-Phases with standard patterns (skip research-phase):
-- **Phase 1 (hygiene):** git-filter-repo is well-documented; ruff --fix is deterministic; no unknowns
-- **Phase 2 (metadata):** pyproject.toml field names are well-documented in Python Packaging User Guide
-- **Phase 3 (community files):** boilerplate content with established templates (Contributor Covenant, CHANGELOG format)
-- **Phase 4 (CI):** GitHub Actions Python matrix is thoroughly documented
+Phases with well-documented patterns (standard implementation, no deeper research needed):
+- **Phase 1 (Schema):** Additive JSON Schema extension is a solved pattern; backward-compat rules are explicit in jsonschema docs
+- **Phase 5 (Scoring):** Partition-by-field pattern already exists in `_score_partition`; adding a sibling function is straightforward
+- **Phase 6 (CLI):** click subcommand extension is well-documented
 
-Phases likely needing attention during planning:
-- **Phase 4 (CI):** Verify google-genai is the correct current PyPI package name before writing optional dep install steps; verify evaluator test mocking strategy does not leak into required test paths
-- **Phase 5 (README):** Resolve the results/ permanence decision before writing the README results table — if large evaluation JSONs move to GitHub Release assets, the README must point there instead of results/evaluations/
+Phases that may need validation during implementation:
+- **Phase 2 (Visual-Only):** Leakage test behavior on visual-only subset is untested until the generator exists; run `test_leakage.py` immediately after first generation batch
+- **Phase 4 (Temporal):** `early_detection_rate` threshold (first 2 alerts) needs validation once temporal scenarios exist; not calibrated against real data
+- **Phase 5 (Scoring):** UCF Crime class distribution audit needed before publishing cross-track comparisons; distribution-adjusted reporting may be required
+
+---
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | ruff, GitHub Actions, codecov versions verified against PyPI and GitHub releases as of 2026-04-12 |
-| Features | HIGH | Cross-referenced against 6 comparable benchmarks (HumanEval, SWE-bench, MMLU, BIG-bench, MLE-bench, MTEB) |
-| Architecture | HIGH | Based on direct repo inspection (git ls-files, pyproject.toml, module structure); no inference needed |
-| Pitfalls | HIGH | Most pitfalls directly observed in the repo (large files, missing LICENSE, lint errors, pyproject.toml gaps) |
+| Stack | HIGH | All decisions traceable to PyPI release dates and pip install constraints; decord abandonment confirmed; opencv-python-headless wheels confirmed for target Python matrix |
+| Features | HIGH | Derived from direct VISION.md spec plus code inspection of what the stub VisualGenerator currently does; gaps between spec and implementation clearly identified |
+| Architecture | HIGH | All claims traceable to specific file/line; required array and GT function call chain directly observed in schema.py, generators.py, scorer.py |
+| Pitfalls | HIGH | Derived from direct code inspection including test_leakage.py stump threshold, test_core.py fixture patterns, and distributions.py pool contents |
 
 **Overall confidence:** HIGH
 
-### Gaps to Address
+### Gaps to Address During Implementation
 
-- **results/ permanence decision:** PROJECT.md marks this as a pending key decision. Research recommendation is to keep results/ as example outputs (research value, ~16MB is acceptable), but if that decision flips, README content and .gitignore must change accordingly. Resolve before Phase 5.
-- **Canonical generate invocations:** The exact psai-bench generate flags that produced the canonical v1.0 dataset need to be confirmed and documented. Without this, reproducibility documentation in the README cannot be written accurately. Confirm during Phase 1 or 2.
-- **numpy version used for v1.0 dataset:** The exact numpy version active when 7eda522 was committed should be identified so the README and release notes can document it for reproducibility. Address during Phase 1.
+- **Leakage test behavior on visual-only subset:** Predicted to pass with shared description pools; not empirically confirmed until the generator exists. Run `test_leakage.py` immediately after first generation batch and tune pool sampling if needed.
+
+- **Temporal escalation threshold calibration:** `early_detection_rate` defined as "THREAT detected within first 2 alerts of a threat sequence." This threshold is reasonable but arbitrary until real temporal scenarios exist. Validate during Phase 4 and adjust `SequenceScoreReport` field definitions before Phase 5.
+
+- **UCF Crime class distribution for visual track:** 150 normal / 290 total = 51.7% BENIGN before mapping; actual distribution depends on `UCF_CATEGORY_MAP` thresholds. Compute in Phase 2 before Phase 5 cross-track comparisons are built. May require stratified subsampling.
+
+- **Track-aware validation in `validation.py`:** ARCHITECTURE.md inferred the extension pattern from test_core.py without reading validation.py in full. Read validation.py at the start of Phase 1 to confirm the pattern before writing track-aware logic.
+
+- **Contradictory description subtlety calibration:** Pitfall 7 warns that algorithmic flipping produces obviously wrong descriptions. The CONTRADICTORY_*_DESCRIPTIONS pools must be hand-curated or human-reviewed before use. Budget for a review pass in Phase 3.
+
+---
 
 ## Sources
 
-### Primary (HIGH confidence)
-- ruff PyPI page (pypi.org/project/ruff/) — v0.15.10 confirmed current
-- astral-sh/ruff-pre-commit (github.com/astral-sh/ruff-pre-commit) — pre-commit hook rev confirmed
-- codecov/codecov-action (github.com/codecov/codecov-action) — v5 stable, v6 not yet released
-- Python Packaging User Guide (packaging.python.org) — pyproject.toml metadata fields
-- NumPy NEP 19 (numpy.org/neps/nep-0019-rng-policy.html) — RNG version stability policy
-- git-filter-repo (github.com/newren/git-filter-repo) — recommended by git official docs
-- Contributor Covenant (contributor-covenant.org) — CODE_OF_CONDUCT boilerplate
-- Direct repo inspection: git show --stat 7eda522, git ls-files, pyproject.toml, .gitignore
+### Primary (HIGH confidence — direct code inspection or official sources)
+- PSAI-Bench `psai_bench/schema.py` — ALERT_SCHEMA required array, track enum
+- PSAI-Bench `psai_bench/generators.py` — VisualGenerator, MetadataGenerator, VisualTrackMapper coupling
+- PSAI-Bench `psai_bench/scorer.py` — score_run flat-list assumption, _score_partition pattern
+- PSAI-Bench `psai_bench/distributions.py` — assign_ground_truth_v2, DESCRIPTION_POOL_AMBIGUOUS
+- PSAI-Bench `psai_bench/baselines.py` — baseline structure, API-dependency exclusion
+- PSAI-Bench `tests/test_leakage.py` — stump accuracy threshold (70%), leakage test design
+- PSAI-Bench `.planning/VISION.md` — v3.0 feature definitions and design intent
+- PSAI-Bench `.planning/PROJECT.md` — no-new-deps constraint, 133-test regression requirement
+- opencv-python-headless PyPI — version 4.13.0.92, released 2026-02-05, Python 3.7–3.13 wheels confirmed
 
-### Secondary (MEDIUM confidence)
-- HumanEval, SWE-bench, MMLU, BIG-bench, MLE-bench, MTEB GitHub repos — feature/badge pattern analysis
-- daily.dev badge best practices — "3 max, stick to what's truthful"
-- hynek.me/articles/python-github-actions/ — Python CI patterns
+### Secondary (MEDIUM confidence — well-established external patterns)
+- GroundLie360 (2025): https://arxiv.org/html/2509.08008v1 — contradictory text-video benchmark pattern from misinformation domain; same mechanism applied to security triage
+- Video-MME / AKS (CVPR 2025): https://arxiv.org/abs/2502.21271 — frame extraction vs full-video gap; keyframe baseline patterns
+- TSB-AD benchmark: https://github.com/TheDatumOrg/TSB-AD — VUS-PR metric identified as inappropriate for discrete alert sequences
+
+### Tertiary (referenced, not independently verified)
+- Snyk decord health report — maintenance status: Inactive (confirmed by PyPI last-release date)
+- KDD 2025 survey on time-series anomaly detection — scoring patterns for alert-based evaluation
 
 ---
-*Research completed: 2026-04-12*
+*Research completed: 2026-04-13*
 *Ready for roadmap: yes*

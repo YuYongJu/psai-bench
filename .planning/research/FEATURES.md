@@ -1,168 +1,139 @@
-# Feature Research
+# Feature Landscape: PSAI-Bench v3.0
 
-**Domain:** Open-source ML benchmark release artifacts
-**Researched:** 2026-04-12
+**Domain:** Visual and temporal track additions to an existing security alert triage benchmark
+**Milestone:** v3.0 Perception-Reasoning Gap
+**Researched:** 2026-04-13
 **Confidence:** HIGH
 
 ## Framing Note
 
-The benchmark core (CLI, scorer, generators, evaluators) is complete at v1.0rc1. Every "feature" here is a **release artifact** — documentation, metadata, and presentation scaffolding needed to publish PSAI-Bench as a credible open-source benchmark. None of these involve writing new benchmark logic.
+v2.0 shipped a complete Metadata Track with context-dependent GT, context-dependent scoring, 133 tests, and BYOS workflow. The v3.0 features are additions to that foundation. Every feature here must respect the constraint that video processing is explicitly out of scope — the benchmark generates structured scenario data; the evaluated system processes it. No video decoding libraries, no frame extraction pipelines, no video file bundling. The benchmark's job is to define what the visual content shows (in structured form) and let the system decide how to use that.
 
 ---
 
-## Feature Landscape
+## What Already Exists
 
-### Table Stakes (Users Expect These)
+| Component | State |
+|-----------|-------|
+| `VisualGenerator` | Stub. Clones MetadataGenerator output, replaces `track`, adds `visual_data.uri`. GT is still determined by metadata signals — video URI is decoration. |
+| `ALERT_SCHEMA.visual_data` | Object with `type`, `uri`, `duration_sec`, `resolution`. No content description field. |
+| `_META_SCHEMA_V2` | No visual- or sequence-specific fields. |
+| `baselines.py` | Four baselines, all metadata-only. No frame extraction baseline. |
+| `scorer.py` | Per-alert independent scoring. No sequence-aware scoring. |
 
-Features that every successful benchmark includes. Missing any of these makes the project feel unfinished to researchers evaluating whether to cite or extend it.
+---
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| README results table | MMLU, MLE-bench, BIG-bench all embed model scores directly; first thing researchers look for | LOW | Gates on `results/` decision — commit GPT-4o UCF metadata run as example output |
-| BibTeX citation block | Universally present in every benchmark examined (HumanEval, SWE-bench, MMLU, MTEB, BIG-bench, MLE-bench); absence signals "not citable" | LOW | Single arXiv-style BibTeX entry; no paper yet so cite GitHub repo + year |
-| pip install + one-command quickstart | SWE-bench, HumanEval, MTEB all start with install + minimal usage example; researchers test locally before reading further | LOW | `pip install psai-bench` then `psai-bench generate --scenario ucf --n 50` |
-| LICENSE file | Apache-2.0 already declared in pyproject.toml; not having the actual file is a red flag for enterprise users | LOW | File needs to exist at repo root; decision already made |
-| Shields.io badges (3 max) | Python version, CI status, License — the standard triad for Python tools; more than 3 is noise | LOW | `python-3.10+`, `tests passing`, `Apache-2.0` |
-| CONTRIBUTING.md | SWE-bench and MTEB both reference it; tells researchers how to submit new evaluations or extend scenarios | LOW | Short file: how to run tests, how to add a model evaluator, issue templates |
-| CODE_OF_CONDUCT.md | Standard for credible OSS; GitHub prompts for it; trivial to add | LOW | Use Contributor Covenant boilerplate verbatim |
-| Example output files in repo | HumanEval provides `example_problem.jsonl` and `example_solutions.jsonl`; users need to see expected format before running | LOW | The existing `results/evaluations/gpt-4o_ucf_metadata_run1.json` serves this purpose directly |
-| CHANGELOG.md | Signals version maturity for a v1.0 release; researchers need to know what changed between versions | LOW | Single entry for v1.0.0; establish format for future versions |
-| GitHub Actions CI badge (tests + lint) | Researchers checking if a benchmark is maintained look for green CI; absence raises reliability questions | MEDIUM | pytest + ruff via Actions; generates the CI badge |
-| Clean .gitignore (generated data excluded) | 16MB generated JSON bloats the repo; reproducible-by-seed means data shouldn't be committed | LOW | Add `data/` and generated scenario files; keep `results/` as example outputs |
-| Reproducible generate command with seed | Users must be able to regenerate the exact benchmark scenarios that produced the published results | LOW | Already implemented; needs to be prominently documented in README |
+## Table Stakes
 
-### Differentiators (Competitive Advantage)
+Features that must exist for the benchmark to deliver on its stated v3.0 claims. Missing any of these makes the benchmark untestable for the features it advertises.
 
-Features that distinguish PSAI-Bench from generic LLM benchmarks and support the core research claim.
+| Feature | Why Required | Complexity | Dependencies |
+|---------|--------------|------------|--------------|
+| Visual-only scenario generation | VISION.md core claim: "video + minimal metadata, system derives everything from video." Without this the visual track remains decoration. | MEDIUM | Schema extension needed: `visual_ground_truth_description` in `visual_data`; strip severity, description, zone from alert body for visual-only scenarios. GT must derive from visual content description, not context signals. |
+| Contradictory scenario flag in `_meta` | Without a flag identifying which scenarios are contradictory, BYOS users cannot filter them or report contradictory-specific accuracy. Results are uninterpretable. | LOW | New `_meta` field `contradictory: bool`; existing `adversarial` field is a model for this. |
+| Frame extraction baseline | Visual track needs at least one non-random baseline, otherwise there is no floor to beat. The frame extraction baseline simulates a system that converts keyframes to text descriptions. It makes the research question "does full-video temporal analysis beat static keyframe description?" answerable. | LOW | New function in `baselines.py`. Can be implemented with synthetic frame descriptions drawn from `visual_ground_truth_description`. No new dependencies. |
+| Visual track scoring (TDR/FASR by track) | Without per-track metric breakdowns, the benchmark cannot answer "does visual input improve triage?" — which is the entire research question. | LOW | The scorer already aggregates globally. Need to partition results by `track` field. Minor extension of existing scorer. |
+| Sequence group identifier in schema | Temporal sequences require a `sequence_id` to link related alerts. Without it, evaluators cannot load sequences as ordered groups. | LOW-MEDIUM | Schema extension. Backward-compatible if optional field. |
+| Sequence GT that evolves across alerts | If GT for alert N+1 is independent of alert N, temporal sequences add no value. The escalation pattern must be encoded so the full sequence produces a narrative arc: e.g., BENIGN → SUSPICIOUS → THREAT. | MEDIUM | New generator for `TemporalSequenceGenerator`. Produces groups of 3-5 alerts with monotonically escalating or de-escalating GT and explicit causal links in context. |
+| Temporal scoring | The existing scorer evaluates each alert independently. Temporal sequences require sequence-level evaluation: did the system escalate at the right alert? Did it correctly identify when the threat resolved? | HIGH | Most significant new component. Separate scoring path from per-alert scoring. May require new metrics: escalation latency (how many alerts until system escalated), false escalation rate. |
+
+---
+
+## Differentiators
+
+Features that distinguish the v3.0 benchmark from all prior work and justify the "Perception-Reasoning Gap" framing.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Pre-computed results in repo (`results/`) | Most benchmarks make users run everything themselves (SWE-bench, MMLU); having a real GPT-4o result immediately demonstrates the tool works and provides a comparison anchor | LOW | Commit `results/evaluations/` and `results/baselines/`; document as "example outputs" |
-| Perception-reasoning gap analysis prominently surfaced | The unique research contribution — measuring whether video data actually changes model decisions vs. metadata-only reasoning; no other physical security benchmark does this | LOW | README "Key Findings" section with a concrete gap metric from the GPT-4o run |
-| Safety-weighted metrics explained in README | TDR/FASR/ECE have non-obvious security domain meanings; explaining the weighting rationale (false negatives cost more than false positives in security) differentiates from generic F1/accuracy tables | LOW | 3-4 sentence methodology note in README, full details in architecture section |
-| Three scenario tracks documented (metadata, visual, multi-sensor) | Explicitly showing the three difficulty tiers helps researchers understand the research design at a glance | LOW | Comparison table in README: track → input modality → what it tests |
-| Real dataset provenance (UCF Crime, Caltech Pedestrian) | Links to data sources and explains the grounding in real incident data — distinguishes from synthetic-only benchmarks | LOW | Dataset section in README with HuggingFace and citation links |
+| Contradictory scenarios (visual overrides metadata) | No existing physical security benchmark tests whether a model's visual perception can override textual priors. GroundLie360 (2025) handles contradictory text-video in misinformation detection — the same mechanism applied to security triage is novel. This is the primary research contribution. | MEDIUM | Two sub-types: (1) metadata-says-THREAT, video-shows-BENIGN (overreach); (2) metadata-says-BENIGN, video-shows-THREAT (underreach). GT follows video. Must track which modality the system trusted — add `modality_followed` to output schema or track by comparing verdict to metadata-implied vs. video-implied verdict. |
+| Perception-reasoning gap metric | The measurable outcome of the contradictory scenario design: how often does adding visual data change the verdict, and is that change correct? This is what makes a paper publishable — a concrete gap metric. | LOW | Derived metric computed at scoring time, not a generator feature. Compare metadata-track accuracy vs. visual-track accuracy on matched contradictory scenarios. |
+| Temporal escalation patterns | Real-world security triage involves sequential reasoning. No public physical security benchmark encodes escalation sequences. TSB-AD and similar time-series anomaly benchmarks handle continuous signals, not discrete alert sequences with narrative structure. | HIGH | Each 3-5 alert sequence should have a "trigger alert" — the alert at which a correctly-functioning system should escalate. GT for the sequence includes: trigger index, expected escalation verdict, expected final verdict. |
+| Visual ground truth description field | Making the visual content machine-readable (as a structured description) without shipping video files or requiring processing infrastructure. This is the design choice that enables the BYOS model to work for visual scenarios. | LOW-MEDIUM | New field in `visual_data`: `content_description` (string, LLM-readable description of what the video shows) and `ground_truth_visual_event` (structured enum of event type). Populated during generation from UCF Crime category. |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+---
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Jupyter notebook quickstart | BIG-bench and MTEB use them; users may expect interactive tutorials | BIG-bench is a 200+ contributor project with dedicated infra; a notebook for a CLI tool adds maintenance burden without proportional value; notebooks go stale | Good README with copy-pasteable CLI commands is faster for users and zero maintenance |
-| HuggingFace Spaces / web leaderboard | MTEB directs to HF Spaces; looks polished | Requires separate infrastructure, ongoing hosting, and maintenance; PROJECT.md explicitly says CLI-first; single GPT-4o result doesn't justify a leaderboard | Results table in README; add HF Spaces after more model evaluations exist |
-| Docker evaluation environment | SWE-bench and MLE-bench use Docker | Those benchmarks execute untrusted model-generated code that must be sandboxed; PSAI-Bench passes prompts to API endpoints — no sandboxing needed; Docker adds setup friction | Simple `pip install` with optional API key configuration |
-| Model comparison matrix across all providers | Seems like a natural benchmark output | Only GPT-4o UCF metadata has been evaluated; a sparse comparison table (one model, one track) looks weaker than no table; fabricating results is a research integrity issue | Show GPT-4o vs baselines for the one completed evaluation; add columns as evaluations are run |
-| Automated leaderboard via PR submission | SWE-bench accepts community result submissions | Requires review process, validation infrastructure, and ongoing maintenance; wrong for v1.0 with one author | Accept result submissions as issues or PRs with raw JSON; manually curate |
+## Anti-Features
+
+| Feature | Why Requested | Why to Avoid | What to Do Instead |
+|---------|---------------|--------------|-------------------|
+| Video file bundling | Seems necessary for a "visual track" | Shipping 100+ GB of video files is incompatible with BYOS model, Apache-2.0 licensing of derived UCF Crime/Caltech content, and GitHub constraints. Explicit project constraint: "no video processing implementation — v3.0." | Ship `visual_data.uri` (existing) plus `visual_data.content_description` (new). Users who can process video use the URI. Users who can't use the structured description. Both are valid BYOS approaches. |
+| Real video frame extraction pipeline | Makes the frame extraction baseline "real" | Requires ffmpeg or cv2 dependency. Project constraint: "no new dependencies unless strictly needed." Frame extraction is the user's job; the baseline should simulate what a keyframe-based system would produce, not actually implement one. | Frame extraction baseline uses synthetic descriptions drawn from the scenario's `visual_ground_truth_description`. It demonstrates the design pattern and gives a score floor. |
+| Full video temporal analysis (ground truth from video processing) | Would make GT fully principled | Requires processing real video to determine GT — that's the user's system's job, not the benchmark's job. GT for visual scenarios must be determined at generation time. | GT is determined by the UCF Crime category and injected visual content description. Same deterministic-generation principle as metadata GT. |
+| Continuous temporal scoring (VUS, range-AUC) | Appropriate for time-series anomaly detection benchmarks (TSB-AD pattern) | PSAI-Bench produces discrete alerts (3-class per alert), not continuous anomaly scores over time. VUS metrics assume a continuous score signal with a sliding threshold. | Sequence-level scoring: escalation latency, correct-escalation rate, correct-resolution rate. These are discrete, interpretable, and domain-appropriate for security SOC workflows. |
+| Aggregate sequence score with time decay | Sounds sophisticated | Time decay weights assume earlier alerts matter less — opposite of security triage where early detection of an escalating threat is more valuable, not less. Any decay function encodes an arbitrary domain assumption. | Keep scoring transparent and separate: per-alert accuracy, escalation latency, resolution accuracy. Let operators weight by their priorities (existing pattern from v2.0). |
 
 ---
 
 ## Feature Dependencies
 
 ```
-CI (GitHub Actions)
-    └──generates──> CI badge in README
+Schema: visual_ground_truth_description in visual_data
+    └──enables──> Visual-only scenario generation (GT derives from description, not context signals)
+    └──enables──> Contradictory scenario generation (metadata GT vs visual GT conflict)
+    └──enables──> Frame extraction baseline (baseline reads content_description field)
 
-results/ in repo (committed)
-    └──enables──> Results table in README
-    └──enables──> Pre-computed results differentiator
-    └──enables──> Perception-reasoning gap example in README
+Schema: _meta.contradictory flag
+    └──enables──> Contradictory-specific accuracy reporting in scorer
+    └──enables──> Perception-reasoning gap metric computation
 
-LICENSE file
-    └──required for──> License badge
+Schema: sequence_id + alert_index_in_sequence
+    └──enables──> TemporalSequenceGenerator
+    └──enables──> Temporal scoring path in scorer
 
-pyproject.toml metadata (authors, URLs)
-    └──required for──> PyPI version badge (if published)
-    └──required for──> Proper citation block
+TemporalSequenceGenerator
+    └──depends on──> MetadataGenerator v2 (reuse context-dependent GT)
+    └──produces──> Linked alerts with escalating GT narrative
+    └──enables──> Temporal scoring
 
-.gitignore (data/ excluded)
-    └──depends on──> Reproducible seed generate command documented
+Temporal scoring
+    └──depends on──> sequence_id grouping in scenarios
+    └──new component──> Separate from per-alert scoring
+    └──produces──> Escalation latency, correct-escalation rate
+
+Frame extraction baseline
+    └──depends on──> visual_ground_truth_description field
+    └──added to──> baselines.py
+    └──enables──> Visual track score floor
 ```
 
-### Dependency Notes
+---
 
-- **results/ commit decision gates README content:** The PROJECT.md marks this as a pending key decision. If `results/` is excluded from git, the results table in README requires fetching and documenting results elsewhere. Resolve this first — the recommendation is to keep `results/` as example outputs (the data is small, ~16MB, and has research value).
-- **CI badge requires Actions to pass:** The 12 ruff lint errors and CLI/statistics test gaps must be fixed before the CI badge shows green. Badge before CI is a credibility risk.
-- **Citation block does not require a paper:** Cite the GitHub repo with a year. BibTeX can reference a `misc` type with `howpublished = {\url{...}}`. This is standard for software without a published paper.
+## Complexity and Phase Sequencing Rationale
+
+**Visual-only + contradictory scenarios (ship together):** Both depend on `visual_ground_truth_description` in the schema. Visual-only strips metadata signals; contradictory adds metadata that conflicts with visual content. Same schema extension gates both. Natural single phase.
+
+**Temporal sequences (separate phase):** The only feature that touches schema, generators, AND scorer simultaneously. Sequence-ID threading through the schema, a new generator class, a new scoring path, and new metrics. Highest implementation risk. Should be its own phase so it can slip independently without blocking visual track delivery.
+
+**Frame extraction baseline (fast follow):** One new function in `baselines.py`, no schema changes, no new deps. Can ship with visual track or immediately after. LOW risk.
+
+**Evaluation protocol document:** Documents the evaluation procedure for all three new feature types. No code, but must reflect final decisions on GT definition, scoring protocol, and sequence evaluation rules. Should be the last artifact of v3.0, not the first.
 
 ---
 
-## MVP Definition
+## Concrete Complexity Estimates
 
-### Launch With (v1.0 Release)
-
-The minimum needed to publish on GitHub and present on LinkedIn as credible benchmark infrastructure.
-
-- [ ] README with: badges, quickstart (install + generate + score), scenario track table, results table (GPT-4o vs baselines), methodology note (safety weighting), dataset provenance, citation block — **the single highest-value artifact**
-- [ ] LICENSE file (Apache-2.0) — **required for any OSS claim**
-- [ ] CONTRIBUTING.md — short, tells researchers how to add model evaluators
-- [ ] CODE_OF_CONDUCT.md — boilerplate, required for GitHub community profile
-- [ ] GitHub Actions CI (test + lint) — green badge signals maintained project
-- [ ] Lint clean (12 ruff errors fixed) — required for CI to pass
-- [ ] .gitignore updated (generated data excluded, results/ kept) — repo hygiene
-- [ ] CHANGELOG.md with v1.0.0 entry — signals version maturity
-- [ ] pyproject.toml metadata complete (authors, URLs, classifiers) — required for proper citation and PyPI readiness
-- [ ] Version bumped to 1.0.0 — signals stability to researchers
-
-### Add After Validation (v1.x)
-
-- [ ] Expanded test coverage (CLI tests, statistics tests) — add once CI baseline is green; currently 47% coverage
-- [ ] Additional model evaluations (Claude, Gemini) — needed before a multi-column comparison table is credible
-- [ ] HuggingFace dataset card — when multiple evaluations justify a proper leaderboard
-
-### Future Consideration (v2+)
-
-- [ ] HuggingFace Spaces leaderboard — only justified with 5+ model evaluations
-- [ ] Jupyter notebook tutorial — only if user requests emerge or adoption warrants it
-- [ ] Visual track model evaluations — out of scope for v1.0, requires video processing infrastructure
-
----
-
-## Feature Prioritization Matrix
-
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| README (results, quickstart, citation) | HIGH | LOW | P1 |
-| LICENSE file | HIGH | LOW | P1 |
-| GitHub Actions CI | HIGH | MEDIUM | P1 |
-| Lint clean | HIGH | LOW | P1 (gates CI) |
-| Shields.io badges | HIGH | LOW | P1 (gates on CI passing) |
-| .gitignore cleanup | MEDIUM | LOW | P1 |
-| CONTRIBUTING.md | MEDIUM | LOW | P1 |
-| CODE_OF_CONDUCT.md | LOW | LOW | P1 (trivial, expected) |
-| CHANGELOG.md | MEDIUM | LOW | P1 |
-| pyproject.toml metadata | MEDIUM | LOW | P1 |
-| Expanded test coverage | MEDIUM | MEDIUM | P2 |
-| Additional model evaluations | HIGH | HIGH (API cost) | P3 |
-| HuggingFace Spaces leaderboard | MEDIUM | HIGH | P3 |
-
----
-
-## Competitor / Comparator Analysis
-
-| Feature | HumanEval | SWE-bench | MMLU | BIG-bench | MLE-bench | PSAI-Bench Plan |
-|---------|-----------|-----------|------|-----------|-----------|-----------------|
-| Results table in README | No | Leaderboard | Yes (in README) | Plot image | Yes (in README) | Yes — GPT-4o vs 4 baselines |
-| BibTeX citation | Yes | Yes (3 entries) | Yes | Yes | Yes | Yes — single entry |
-| Quickstart (install + run) | Yes | Yes | Minimal | Yes | Yes | Yes — install + generate + score |
-| Badges | None | Python, License, PyPI | None | None | None | CI, Python, License |
-| CONTRIBUTING.md | No | Yes | No | Yes | No | Yes |
-| Example output files | Yes (.jsonl) | No | No | Yes (via Colab) | No | Yes (results/evaluations/) |
-| Jupyter notebooks | No | No | No | Yes (Colab) | No | No — CLI-first |
-| Docker requirement | No | Yes | No | No | Yes | No — unnecessary |
-| Pre-committed result examples | No | No | No | No | No | Yes — differentiator |
+| Feature | Estimated LOC | Test Surface | Risk |
+|---------|---------------|--------------|------|
+| Schema extension (visual content description + sequence fields) | ~20-40 | Schema validation tests | Low |
+| Visual-only generator | ~100-150 | 3-5 new test cases | Medium |
+| Contradictory scenario injection | ~80-120 | Edge cases: both signals agree, only one overrides | Medium |
+| Frame extraction baseline | ~30-50 | Baseline output format tests | Low |
+| Temporal sequence generator | ~200-300 | Sequence ordering, escalation logic, GT arc | High |
+| Temporal scorer | ~150-250 | Escalation latency computation, edge cases (all-BENIGN sequence, immediate-THREAT sequence) | High |
+| Perception-reasoning gap metric | ~30-50 | Derived from existing scorer output | Low |
+| Evaluation protocol doc | Non-code | N/A | Low |
 
 ---
 
 ## Sources
 
-- HumanEval (openai/human-eval): https://github.com/openai/human-eval — badge absence, citation format, example jsonl pattern
-- SWE-bench (swe-bench/SWE-bench): https://github.com/swe-bench/SWE-bench — badge triad (Python/License/PyPI), multiple citation entries, Docker overhead
-- MMLU (hendrycks/test): https://github.com/hendrycks/test — results table directly in README, two-entry citation pattern
-- BIG-bench (google/BIG-bench): https://github.com/google/BIG-bench — Colab notebooks, leaderboard plot, CONTRIBUTING patterns
-- MLE-bench (openai/mle-bench): https://github.com/openai/mle-bench — performance table format with multiple columns, authors section
-- MTEB (embeddings-benchmark/mteb): https://github.com/embeddings-benchmark/mteb — 3-badge pattern, Apache-2.0, leaderboard-as-HF-Spaces pattern
-- Shields.io: https://shields.io/ — badge implementation reference
-- daily.dev badge best practices: https://daily.dev/blog/readme-badges-github-best-practices — "3 max, stick to what's truthful"
+- PSAI-Bench VISION.md — primary feature specification, contradiction and temporal sequence design
+- PSAI-Bench PROJECT.md — constraints (no video processing, no new deps, Apache-2.0)
+- GroundLie360 (2025): https://arxiv.org/html/2509.08008v1 — contradictory text-video benchmark pattern (misinformation domain, same mechanism)
+- TSB-AD benchmark: https://github.com/TheDatumOrg/TSB-AD — temporal anomaly scoring patterns; VUS-PR metric identified as inappropriate for discrete alert setting
+- Video-MME / AKS (CVPR 2025): https://arxiv.org/abs/2502.21271 — frame extraction baseline patterns; establishes that keyframe-vs-full-video is an active research question with measurable gaps
+- KDD 2025 survey on time-series anomaly detection: https://inria.hal.science/hal-05218929/file/kdd_survey.pdf — scoring patterns for alert-based evaluation
 
 ---
-*Feature research for: open-source ML benchmark release*
-*Researched: 2026-04-12*
+*Research for PSAI-Bench v3.0 milestone*
+*Researched: 2026-04-13*
