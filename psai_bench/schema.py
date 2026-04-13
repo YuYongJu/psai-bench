@@ -138,6 +138,10 @@ OUTPUT_SCHEMA = {
 }
 
 VERDICTS = ("THREAT", "SUSPICIOUS", "BENIGN")
+DISPATCH_ACTIONS = (
+    "armed_response", "patrol", "operator_review",
+    "auto_suppress", "request_data",
+)
 DIFFICULTIES = ("easy", "medium", "hard")
 
 # _meta block structure (not schema-validated — benchmark-internal only).
@@ -151,7 +155,7 @@ _META_SCHEMA_V2 = {
         "source_category": {"type": "string"},
         "seed": {"type": "integer"},
         "index": {"type": "integer"},
-        "generation_version": {"type": "string", "enum": ["v1", "v2", "v3"]},
+        "generation_version": {"type": "string", "enum": ["v1", "v2", "v3", "v4"]},
         "weighted_sum": {"type": "number"},
         "adversarial": {"type": "boolean"},
         "ambiguity_flag": {"type": "boolean"},
@@ -180,6 +184,25 @@ _META_SCHEMA_V2 = {
         },
     },
     "required": ["ground_truth", "difficulty", "source_dataset", "source_category", "seed", "index"],
+}
+
+# v4 additions — additive mutations; do not modify dicts above this line
+OUTPUT_SCHEMA["properties"]["dispatch"] = {
+    "type": "string",
+    "enum": list(DISPATCH_ACTIONS),
+    "description": "Recommended operational action (optional; required for cost scoring)",
+}
+
+_META_SCHEMA_V2["properties"]["optimal_dispatch"] = {
+    "type": "string",
+    "enum": list(DISPATCH_ACTIONS),
+    "description": "Benchmark-computed optimal action for cost scoring",
+}
+_META_SCHEMA_V2["properties"]["adversarial_type"] = {
+    "type": ["string", "null"],
+    "enum": [None, "signal_flip", "loitering_as_waiting",
+             "authorized_as_intrusion", "environmental_as_human"],
+    "description": "v4 adversarial sub-type; null for non-adversarial scenarios",
 }
 
 
