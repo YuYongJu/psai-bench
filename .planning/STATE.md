@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Perception-Reasoning Gap
 status: planning
-stopped_at: Milestone v3.0 started — defining requirements
-last_updated: "2026-04-13T10:30:00.000Z"
+stopped_at: Roadmap created for v3.0 — Phase 11 ready to plan
+last_updated: "2026-04-13T00:00:00.000Z"
 last_activity: 2026-04-13
 progress:
-  total_phases: 0
+  total_phases: 7
   completed_phases: 0
-  total_plans: 0
+  total_plans: 10
   completed_plans: 0
   percent: 0
 ---
@@ -20,24 +20,23 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-04-13)
 
-**Core value:** Non-trivially-solvable benchmark where no single input field reveals ground truth
-**Current focus:** v3.0 — Perception-Reasoning Gap (defining requirements)
+**Core value:** Non-trivially-solvable benchmark where no single input field reveals ground truth — extended to test whether video perception adds value over metadata-only triage
+**Current focus:** v3.0 — Perception-Reasoning Gap (Phase 11: Schema v3)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-04-13 — Milestone v3.0 started
-Last activity: 2026-04-13
+Phase: 11 of 17 (Schema v3)
+Plan: — (not started)
+Status: Ready to plan
+Last activity: 2026-04-13 — Roadmap created, Phase 11 ready to plan
 
-Progress: [██░░░░░░░░] 20% (v1.0 complete, v2.0 not started)
+Progress: [████░░░░░░] 40% (v1.0 + v2.0 complete, v3.0 starting)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: ~9 (v1.0)
+- Total plans completed: ~18 (v1.0 + v2.0)
 - Average duration: unknown
 - Total execution time: unknown
 
@@ -46,11 +45,8 @@ Progress: [██░░░░░░░░] 20% (v1.0 complete, v2.0 not started)
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | v1.0 (1-5) | ~9 | - | - |
-| 07 | 2 | - | - |
-| 08 | 1 | - | - |
-| 09 | 3 | - | - |
-| 10 | 1 | - | - |
-| 06 | 2 | - | - |
+| v2.0 (6-10) | 9 | - | - |
+| v3.0 (11-17) | 0/10 | - | - |
 
 *Updated after each plan completion*
 
@@ -58,12 +54,12 @@ Progress: [██░░░░░░░░] 20% (v1.0 complete, v2.0 not started)
 
 ### Decisions
 
-- v1.0: Infrastructure is solid (CLI, scoring engine, stats, CI, 103 tests) — keep
-- v1.0: Scenario generation has critical leakage — rebuild
-- v1.0: Aggregate scoring formula is opaque — replace with separate metrics
-- v1.0: Output schema forces LLM assumptions — simplify
-- v2.0: Context-dependent GT is the core design change
-- v2.0: "Bring Your Own System" is the primary workflow, built-in evaluators are examples
+- v1.0: Infrastructure is solid (CLI, scoring engine, stats, CI) — keep
+- v2.0: Context-dependent GT is the core design change; 133 tests now passing
+- v2.0: "Bring Your Own System" is the primary workflow
+- v3.0: Visual-only fields populated from shared description pools (not sentinels/nulls) — leakage test constraint settles the design conflict
+- v3.0: score_run() is a public contract — temporal scoring ships as separate score_sequences()
+- v3.0: Frame extraction is evaluation protocol, not benchmark code
 
 ### Pending Todos
 
@@ -71,12 +67,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- Decision rubric for context-dependent GT needs careful design — determines benchmark quality
-- Backward compatibility: default params must still produce v1.0-compatible output (SCEN-07, TEST-03)
-- Existing GPT-4o results will be invalid under new scenarios — document this (handled in DOCS-04)
+- Pin seed-42 regression hash BEFORE any generator changes (highest-risk step — do it first in Phase 11)
+- Visual-only leakage test behavior unconfirmed until generator exists — run test_leakage.py immediately after first generation batch
+- Contradictory description pools must be plausible-but-wrong (not obviously wrong) — budget a review pass in Phase 13
 
 ## Session Continuity
 
 Last session: 2026-04-13
-Stopped at: Roadmap created for v2.0, Phase 6 ready to plan
+Stopped at: Roadmap created for v3.0, Phase 11 ready to plan
 Resume file: None

@@ -81,40 +81,41 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | Pending | Pending |
-| INFRA-02 | Pending | Pending |
-| INFRA-03 | Pending | Pending |
-| INFRA-04 | Pending | Pending |
-| VIS-01 | Pending | Pending |
-| VIS-02 | Pending | Pending |
-| VIS-03 | Pending | Pending |
-| VIS-04 | Pending | Pending |
-| CONTRA-01 | Pending | Pending |
-| CONTRA-02 | Pending | Pending |
-| CONTRA-03 | Pending | Pending |
-| CONTRA-04 | Pending | Pending |
-| TEMP-01 | Pending | Pending |
-| TEMP-02 | Pending | Pending |
-| TEMP-03 | Pending | Pending |
-| TEMP-04 | Pending | Pending |
-| SCORE-01 | Pending | Pending |
-| SCORE-02 | Pending | Pending |
-| SCORE-03 | Pending | Pending |
-| SCORE-04 | Pending | Pending |
-| FRAME-01 | Pending | Pending |
-| FRAME-02 | Pending | Pending |
-| FRAME-03 | Pending | Pending |
-| PROTO-01 | Pending | Pending |
-| TEST-01 | Pending | Pending |
-| TEST-02 | Pending | Pending |
-| TEST-03 | Pending | Pending |
-| TEST-04 | Pending | Pending |
-| TEST-05 | Pending | Pending |
+| INFRA-01 | Phase 11 | Pending |
+| INFRA-02 | Phase 11 | Pending |
+| INFRA-03 | Phase 11 | Pending |
+| INFRA-04 | Phase 11 | Pending |
+| TEST-01 | Phase 11 | Pending |
+| TEST-05 | Phase 11 | Pending |
+| VIS-01 | Phase 12 | Pending |
+| VIS-02 | Phase 12 | Pending |
+| VIS-03 | Phase 12 | Pending |
+| VIS-04 | Phase 12 | Pending |
+| TEST-02 | Phase 12 | Pending |
+| CONTRA-01 | Phase 13 | Pending |
+| CONTRA-02 | Phase 13 | Pending |
+| CONTRA-03 | Phase 13 | Pending |
+| CONTRA-04 | Phase 13 | Pending |
+| TEST-03 | Phase 13 | Pending |
+| TEMP-01 | Phase 14 | Pending |
+| TEMP-02 | Phase 14 | Pending |
+| TEMP-03 | Phase 15 | Pending |
+| TEMP-04 | Phase 14 | Pending |
+| SCORE-01 | Phase 15 | Pending |
+| SCORE-02 | Phase 15 | Pending |
+| SCORE-03 | Phase 15 | Pending |
+| SCORE-04 | Phase 15 | Pending |
+| TEST-04 | Phase 15 | Pending |
+| FRAME-01 | Phase 16 | Pending |
+| FRAME-02 | Phase 16 | Pending |
+| FRAME-03 | Phase 16 | Pending |
+| PROTO-01 | Phase 17 | Pending |
 
 **Coverage:**
 - v3.0 requirements: 29 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 29
+- Mapped to phases: 29 (roadmap complete)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-13*
+*Traceability updated: 2026-04-13 — roadmap v3.0 (Phases 11-17)*
