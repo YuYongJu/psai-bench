@@ -4,13 +4,13 @@ milestone: v4.0
 milestone_name: Operational Realism — Phases 18-22
 status: planning
 stopped_at: Roadmap created for v4.0, Phase 18 ready to plan
-last_updated: "2026-04-13T22:53:29.775Z"
+last_updated: "2026-04-13T23:17:43.098Z"
 last_activity: 2026-04-13
 progress:
   total_phases: 5
-  completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  completed_phases: 3
+  total_plans: 6
+  completed_plans: 6
   percent: 100
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-04-13)
 
 ## Current Position
 
-Phase: 20 of 22 (adversarial v4 generator)
+Phase: 21 of 22 (multi site generalization)
 Plan: Not started
 Status: Ready to plan
 Last activity: 2026-04-13
@@ -51,6 +51,7 @@ Progress: [░░░░░░░░░░] 0% (v4.0 starting)
 | 22 (CLI + tests + docs) | 0/? | - | - |
 | 18 | 2 | - | - |
 | 19 | 2 | - | - |
+| 20 | 2 | - | - |
 
 *Updated after each plan completion*
 

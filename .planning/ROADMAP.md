@@ -110,7 +110,7 @@ Plans:
 
 - [x] **Phase 18: Schema and Cost Model Foundation** - Extend schema with dispatch field, define cost model, publish dispatch decision rubric (completed 2026-04-13)
 - [x] **Phase 19: Scoring Pipeline and Baselines** - Add dispatch scoring function, extend dashboard, update all baselines (completed 2026-04-13)
-- [ ] **Phase 20: Adversarial v4 Generator** - Implement behavioral adversarial scenarios with isolated RNG and separate description pools
+- [x] **Phase 20: Adversarial v4 Generator** - Implement behavioral adversarial scenarios with isolated RNG and separate description pools (completed 2026-04-13)
 - [ ] **Phase 21: Multi-Site Generalization** - Add site-type filtering, leakage audit, and generalization gap metric
 - [ ] **Phase 22: CLI Integration, Tests, and Documentation** - Wire all new commands, verify 100% backward compatibility, complete test suite
 
@@ -155,8 +155,8 @@ Plans:
   4. `_meta.adversarial_type` for a v2 scenario reads `signal_conflict`; for a v4 scenario reads one of the 3 behavioral types — never mixed
 **Plans**: 2 plans
 Plans:
-- [ ] 20-01-PLAN.md — Track enum extension (adversarial_v4) + ADV_V4_* description pools in distributions.py
-- [ ] 20-02-PLAN.md — AdversarialV4Generator class + CLI adversarial_v4 track wiring
+- [x] 20-01-PLAN.md — Track enum extension (adversarial_v4) + ADV_V4_* description pools in distributions.py
+- [x] 20-02-PLAN.md — AdversarialV4Generator class + CLI adversarial_v4 track wiring
 
 ### Phase 21: Multi-Site Generalization
 **Goal**: Users can measure how well a system trained on one site type generalizes to another, and confidence in that metric is backed by a leakage audit confirming site identity is not inferable from non-site features
@@ -186,6 +186,6 @@ Plans:
 |-------|----------------|--------|-----------|
 | 18. Schema and Cost Model Foundation | 2/2 | Complete    | 2026-04-13 |
 | 19. Scoring Pipeline and Baselines | 2/2 | Complete    | 2026-04-13 |
-| 20. Adversarial v4 Generator | 0/2 | Not started | - |
+| 20. Adversarial v4 Generator | 2/2 | Complete    | 2026-04-13 |
 | 21. Multi-Site Generalization | 0/? | Not started | - |
 | 22. CLI Integration, Tests, and Documentation | 0/? | Not started | - |
