@@ -110,7 +110,7 @@ Plans:
 - [x] **Phase 13: Contradictory Scenarios** - Build ContradictoryGenerator with video-derived GT, dual GT storage, and contradictory description pools (completed 2026-04-13)
 - [x] **Phase 14: Temporal Sequences** - Build TemporalSequenceGenerator with escalation narrative patterns and sequence threading (completed 2026-04-13)
 - [x] **Phase 15: Scoring Updates** - Add track partitioning, score_sequences(), and perception-reasoning gap metric without modifying score_run() (completed 2026-04-13)
-- [ ] **Phase 16: CLI Extensions** - Extend --track choices and add score-sequences, analyze-frame-gap subcommands
+- [x] **Phase 16: CLI Extensions** - Extend --track choices and add score-sequences, analyze-frame-gap subcommands (completed 2026-04-13)
 - [ ] **Phase 17: Evaluation Protocol** - Write docs/EVALUATION_PROTOCOL.md documenting GT definitions, scoring protocol, and frame extraction baseline
 
 ## Phase Details
@@ -201,7 +201,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 16-01-PLAN.md — Add [visual] dep group, frame_extraction.py, score-sequences and analyze-frame-gap CLI subcommands
+- [x] 16-01-PLAN.md — Add [visual] dep group, frame_extraction.py, score-sequences and analyze-frame-gap CLI subcommands
 
 ### Phase 17: Evaluation Protocol
 **Goal**: A researcher can understand exactly how to evaluate any system against all four tracks using only the published documentation
@@ -231,5 +231,5 @@ Plans:
 | 13. Contradictory Scenarios | v3.0 | 2/2 | Complete    | 2026-04-13 |
 | 14. Temporal Sequences | v3.0 | 1/1 | Complete    | 2026-04-13 |
 | 15. Scoring Updates | v3.0 | 2/2 | Complete    | 2026-04-13 |
-| 16. CLI Extensions | v3.0 | 0/1 | Not started | - |
+| 16. CLI Extensions | v3.0 | 1/1 | Complete    | 2026-04-13 |
 | 17. Evaluation Protocol | v3.0 | 0/1 | Not started | - |

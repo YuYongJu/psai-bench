@@ -4,13 +4,13 @@ milestone: v3.0
 milestone_name: Perception-Reasoning Gap
 status: planning
 stopped_at: Roadmap created for v3.0, Phase 11 ready to plan
-last_updated: "2026-04-13T20:33:32.446Z"
+last_updated: "2026-04-13T20:48:18.477Z"
 last_activity: 2026-04-13
 progress:
   total_phases: 7
-  completed_phases: 5
-  total_plans: 8
-  completed_plans: 8
+  completed_phases: 6
+  total_plans: 9
+  completed_plans: 9
   percent: 100
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-04-13)
 
 ## Current Position
 
-Phase: 16 of 17 (cli extensions)
+Phase: 17 of 17 (evaluation protocol)
 Plan: Not started
 Status: Ready to plan
 Last activity: 2026-04-13
@@ -52,6 +52,7 @@ Progress: [████░░░░░░] 40% (v1.0 + v2.0 complete, v3.0 start
 | 13 | 2 | - | - |
 | 14 | 1 | - | - |
 | 15 | 2 | - | - |
+| 16 | 1 | - | - |
 
 *Updated after each plan completion*
 
