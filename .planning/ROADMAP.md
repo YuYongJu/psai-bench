@@ -109,7 +109,7 @@ Plans:
 - [x] **Phase 12: Visual-Only Scenarios** - Build VisualOnlyGenerator with UCF Crime-based GT derivation and leakage-safe field population (completed 2026-04-13)
 - [x] **Phase 13: Contradictory Scenarios** - Build ContradictoryGenerator with video-derived GT, dual GT storage, and contradictory description pools (completed 2026-04-13)
 - [x] **Phase 14: Temporal Sequences** - Build TemporalSequenceGenerator with escalation narrative patterns and sequence threading (completed 2026-04-13)
-- [ ] **Phase 15: Scoring Updates** - Add track partitioning, score_sequences(), and perception-reasoning gap metric without modifying score_run()
+- [x] **Phase 15: Scoring Updates** - Add track partitioning, score_sequences(), and perception-reasoning gap metric without modifying score_run() (completed 2026-04-13)
 - [ ] **Phase 16: CLI Extensions** - Extend --track choices and add score-sequences, analyze-frame-gap subcommands
 - [ ] **Phase 17: Evaluation Protocol** - Write docs/EVALUATION_PROTOCOL.md documenting GT definitions, scoring protocol, and frame extraction baseline
 
@@ -187,8 +187,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 15-01-PLAN.md — SequenceScoreReport, score_sequences(), format_dashboard track partitioning
-- [ ] 15-02-PLAN.md — compute_perception_gap(), Phase 15 regression test suite
+- [x] 15-01-PLAN.md — SequenceScoreReport, score_sequences(), format_dashboard track partitioning
+- [x] 15-02-PLAN.md — compute_perception_gap(), Phase 15 regression test suite
 
 ### Phase 16: CLI Extensions
 **Goal**: Users can invoke all three new generators from the CLI and compute the frame extraction baseline gap without any code changes
@@ -230,6 +230,6 @@ Plans:
 | 12. Visual-Only Scenarios | v3.0 | 1/1 | Complete    | 2026-04-13 |
 | 13. Contradictory Scenarios | v3.0 | 2/2 | Complete    | 2026-04-13 |
 | 14. Temporal Sequences | v3.0 | 1/1 | Complete    | 2026-04-13 |
-| 15. Scoring Updates | v3.0 | 0/2 | Not started | - |
+| 15. Scoring Updates | v3.0 | 2/2 | Complete    | 2026-04-13 |
 | 16. CLI Extensions | v3.0 | 0/1 | Not started | - |
 | 17. Evaluation Protocol | v3.0 | 0/1 | Not started | - |
