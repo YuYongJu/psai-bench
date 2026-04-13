@@ -107,7 +107,7 @@ Plans:
 
 - [x] **Phase 11: Schema v3** - Extend schema with new tracks, relax required fields for visual tracks, add _meta v3 fields, pin seed-42 regression hash (completed 2026-04-13)
 - [x] **Phase 12: Visual-Only Scenarios** - Build VisualOnlyGenerator with UCF Crime-based GT derivation and leakage-safe field population (completed 2026-04-13)
-- [ ] **Phase 13: Contradictory Scenarios** - Build ContradictoryGenerator with video-derived GT, dual GT storage, and contradictory description pools
+- [x] **Phase 13: Contradictory Scenarios** - Build ContradictoryGenerator with video-derived GT, dual GT storage, and contradictory description pools (completed 2026-04-13)
 - [ ] **Phase 14: Temporal Sequences** - Build TemporalSequenceGenerator with escalation narrative patterns and sequence threading
 - [ ] **Phase 15: Scoring Updates** - Add track partitioning, score_sequences(), and perception-reasoning gap metric without modifying score_run()
 - [ ] **Phase 16: CLI Extensions** - Extend --track choices and add score-sequences, analyze-frame-gap subcommands
@@ -157,8 +157,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 13-01-PLAN.md — Add description pools (CONTRADICTORY_THREAT_DESCRIPTIONS, CONTRADICTORY_BENIGN_DESCRIPTIONS) and implement ContradictoryGenerator in generators.py
-- [ ] 13-02-PLAN.md — Tests (conftest.py + test_contradictory.py) and CLI wiring (replace visual_contradictory UsageError stub)
+- [x] 13-01-PLAN.md — Add description pools (CONTRADICTORY_THREAT_DESCRIPTIONS, CONTRADICTORY_BENIGN_DESCRIPTIONS) and implement ContradictoryGenerator in generators.py
+- [x] 13-02-PLAN.md — Tests (conftest.py + test_contradictory.py) and CLI wiring (replace visual_contradictory UsageError stub)
 
 ### Phase 14: Temporal Sequences
 **Goal**: Users can generate temporal alert sequences of 3-5 related alerts with escalation narrative patterns threaded by sequence_id
@@ -228,7 +228,7 @@ Plans:
 | 6-10. v2.0 Foundation | v2.0 | 9/9 | Complete | 2026-04-13 |
 | 11. Schema v3 | v3.0 | 2/2 | Complete    | 2026-04-13 |
 | 12. Visual-Only Scenarios | v3.0 | 1/1 | Complete    | 2026-04-13 |
-| 13. Contradictory Scenarios | v3.0 | 0/2 | Not started | - |
+| 13. Contradictory Scenarios | v3.0 | 2/2 | Complete    | 2026-04-13 |
 | 14. Temporal Sequences | v3.0 | 0/1 | Not started | - |
 | 15. Scoring Updates | v3.0 | 0/2 | Not started | - |
 | 16. CLI Extensions | v3.0 | 0/1 | Not started | - |
