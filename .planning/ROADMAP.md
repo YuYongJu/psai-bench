@@ -125,11 +125,11 @@ Plans:
   3. A v3 scenario with `_meta.visual_gt_source`, `_meta.contradictory`, `_meta.sequence_id`, and `_meta.sequence_position` validates without schema errors
   4. `pytest` exits 0 with all 133 existing tests passing after schema changes are applied
   5. `generate_ucf_crime(seed=42)` output hash matches the pinned regression value in a dedicated test
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 11-01: Pin seed-42 regression hash test before any generator changes
-- [ ] 11-02: Extend ALERT_SCHEMA track enum, relax required array for visual tracks, add _meta v3 fields; add track-aware validation
+- [ ] 11-01-PLAN.md — Pin seed-42 regression hash (tests/test_seed_regression.py)
+- [ ] 11-02-PLAN.md — Extend schema track enum, relax required, add _meta v3 fields, track-aware validation
 
 ### Phase 12: Visual-Only Scenarios
 **Goal**: Users can generate visual-only scenarios where ground truth is derived from video content labels, not metadata signals, and existing leakage tests pass on the visual-only subset
