@@ -38,7 +38,13 @@ def main():
 @click.option("--output", type=click.Path(), default="data/generated")
 @click.option("--version", "gen_version", type=click.Choice(["v1", "v2"]), default="v1",
               help="Scenario generation version. v2 uses context-dependent GT (PSAI-Bench v2.0).")
-def generate(track: str, source: str, n: int | None, seed: int, output: str, gen_version: str):
+@click.option(
+    "--site-type",
+    type=click.Choice(["solar", "substation", "commercial", "industrial", "campus"]),
+    default=None,
+    help="Filter generated scenarios to a single site type (post-generation, seed-safe).",
+)
+def generate(track: str, source: str, n: int | None, seed: int, output: str, gen_version: str, site_type: str | None):
     """Generate evaluation scenarios."""
     from psai_bench.generators import MetadataGenerator, MultiSensorGenerator, VisualGenerator
 
@@ -96,6 +102,11 @@ def generate(track: str, source: str, n: int | None, seed: int, output: str, gen
         scenarios = AdversarialV4Generator(seed=seed).generate(count)
         click.echo(f"Generated {count} adversarial v4 scenarios")
 
+    if site_type is not None:
+        before = len(scenarios)
+        scenarios = [s for s in scenarios if s["context"]["site_type"] == site_type]
+        click.echo(f"Filtered to {site_type}: {len(scenarios)} of {before} scenarios retained")
+
     version_suffix = f"_{gen_version}" if gen_version != "v1" else ""
     out_file = out_dir / f"{track}_{source}_seed{seed}{version_suffix}.json"
     with open(out_file, "w") as f:
@@ -130,6 +141,39 @@ def score(scenarios: str, outputs: str, fmt: str):
     else:
         from psai_bench.scorer import format_dashboard
         click.echo(format_dashboard(report))
+
+
+@main.command("site-generalization")
+@click.option("--scenarios", type=click.Path(exists=True), required=True,
+              help="Generated scenario file (JSON).")
+@click.option("--outputs", type=click.Path(exists=True), required=True,
+              help="System outputs file (JSON).")
+@click.option("--train", "train_site",
+              type=click.Choice(["solar", "substation", "commercial", "industrial", "campus"]),
+              default=None, help="Training site type for gap computation.")
+@click.option("--test", "test_site",
+              type=click.Choice(["solar", "substation", "commercial", "industrial", "campus"]),
+              default=None, help="Test site type for gap computation.")
+def site_generalization_cmd(scenarios: str, outputs: str, train_site: str | None, test_site: str | None):
+    """Compute per-site accuracy and generalization gap."""
+    from psai_bench.scorer import compute_site_generalization_gap
+
+    with open(scenarios) as f:
+        scenario_data = json.load(f)
+    with open(outputs) as f:
+        output_data = json.load(f)
+
+    result = compute_site_generalization_gap(scenario_data, output_data, train_site, test_site)
+
+    click.echo("\n=== Per-Site Accuracy ===")
+    for site, acc in sorted(result["per_site_accuracy"].items()):
+        click.echo(f"  {site:<15} {acc:.4f}")
+    click.echo(f"\nGeneralization gap: {result['generalization_gap']:.4f}")
+
+    if result.get("train_accuracy") is not None:
+        click.echo(f"Train site ({train_site}): {result['train_accuracy']:.4f}")
+    if result.get("test_accuracy") is not None:
+        click.echo(f"Test site  ({test_site}):  {result['test_accuracy']:.4f}")
 
 
 @main.command()
