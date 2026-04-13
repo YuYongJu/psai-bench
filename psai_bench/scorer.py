@@ -128,6 +128,116 @@ def format_dashboard(report: ScoreReport, ambiguous_report: ScoreReport | None =
     return "\n".join(lines)
 
 
+@dataclass
+class SequenceScoreReport:
+    """Scoring report for temporal sequence evaluation."""
+
+    n_sequences: int = 0
+    n_threat_sequences: int = 0    # sequences containing at least one THREAT ground truth
+    n_benign_sequences: int = 0    # sequences where all GT are BENIGN or SUSPICIOUS
+    early_detection_rate: float = 0.0   # threat seqs where model reached THREAT in first 2 alerts
+    late_detection_rate: float = 0.0    # threat seqs where model first hit THREAT only at last alert
+    missed_sequence_rate: float = 0.0   # threat seqs where model never returned THREAT
+    false_escalation_rate: float = 0.0  # benign seqs where model returned THREAT on any alert
+    per_sequence_results: dict = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return {k: v for k, v in self.__dict__.items()}
+
+
+def score_sequences(
+    scenarios: list[dict],
+    outputs: list[dict],
+) -> SequenceScoreReport:
+    """Score temporal sequence evaluation.
+
+    Groups alerts by _meta.sequence_id, sorts by _meta.sequence_position,
+    evaluates each sequence as a unit.
+
+    Alerts without sequence_id in _meta are silently ignored — mixed files allowed.
+    Does NOT call or modify score_run().
+    """
+    # Build output lookup
+    output_map = {o["alert_id"]: o for o in outputs}
+
+    # Group scenarios by sequence_id — skip those without one
+    sequences: dict[str, list[dict]] = {}
+    for s in scenarios:
+        seq_id = s.get("_meta", {}).get("sequence_id")
+        if seq_id is None:
+            continue
+        sequences.setdefault(seq_id, []).append(s)
+
+    if not sequences:
+        return SequenceScoreReport()
+
+    n_threat_seqs = 0
+    n_benign_seqs = 0
+    n_early = 0
+    n_late = 0
+    n_missed = 0
+    n_false_escalation = 0
+    per_sequence_results: dict = {}
+
+    for seq_id, alerts in sequences.items():
+        # Sort by sequence_position
+        sorted_alerts = sorted(alerts, key=lambda s: s["_meta"]["sequence_position"])
+
+        # Classify: threat if any alert has GT == "THREAT"
+        is_threat_seq = any(a["_meta"]["ground_truth"] == "THREAT" for a in sorted_alerts)
+
+        # Collect model verdicts in order
+        model_verdicts = []
+        for a in sorted_alerts:
+            out = output_map.get(a["alert_id"])
+            verdict = out["verdict"] if out is not None else "MISSING"
+            model_verdicts.append(verdict)
+
+        # Get escalation pattern from first alert (all alerts in seq share it)
+        pattern = sorted_alerts[0]["_meta"].get("escalation_pattern", "")
+
+        per_sequence_results[seq_id] = {
+            "pattern": pattern,
+            "is_threat_seq": is_threat_seq,
+            "model_verdicts": model_verdicts,
+        }
+
+        if is_threat_seq:
+            n_threat_seqs += 1
+            last_idx = len(model_verdicts) - 1
+
+            threat_indices = [i for i, v in enumerate(model_verdicts) if v == "THREAT"]
+            if not threat_indices:
+                # Model never returned THREAT — missed
+                n_missed += 1
+            else:
+                first_threat_idx = threat_indices[0]
+                if first_threat_idx <= 1:
+                    # THREAT appeared at index 0 or 1 (first two alerts) — early
+                    n_early += 1
+                elif first_threat_idx == last_idx:
+                    # First THREAT only at last alert — late
+                    n_late += 1
+                # Otherwise: detected in the middle — neither early nor late nor missed
+        else:
+            n_benign_seqs += 1
+            if "THREAT" in model_verdicts:
+                n_false_escalation += 1
+
+    n_sequences = len(sequences)
+    report = SequenceScoreReport(
+        n_sequences=n_sequences,
+        n_threat_sequences=n_threat_seqs,
+        n_benign_sequences=n_benign_seqs,
+        early_detection_rate=n_early / n_threat_seqs if n_threat_seqs > 0 else 0.0,
+        late_detection_rate=n_late / n_threat_seqs if n_threat_seqs > 0 else 0.0,
+        missed_sequence_rate=n_missed / n_threat_seqs if n_threat_seqs > 0 else 0.0,
+        false_escalation_rate=n_false_escalation / n_benign_seqs if n_benign_seqs > 0 else 0.0,
+        per_sequence_results=per_sequence_results,
+    )
+    return report
+
+
 def _safety_score(tdr: float, fasr: float, w_threat: float, w_false: float) -> float:
     """Compute Safety Score = (w_threat * TDR + w_false * FASR) / (w_threat + w_false)."""
     if w_threat + w_false == 0:
