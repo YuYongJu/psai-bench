@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from psai_bench.cost_model import CostModel, CostScoreReport, score_dispatch as _cost_model_score_dispatch
+
 
 @dataclass
 class ScoreReport:
@@ -92,6 +94,8 @@ def format_dashboard(
     report: ScoreReport,
     ambiguous_report: ScoreReport | None = None,
     track_reports: dict[str, ScoreReport] | None = None,
+    *,
+    cost_report: CostScoreReport | None = None,
 ) -> str:
     """Format a ScoreReport as a human-readable metrics dashboard.
 
@@ -105,6 +109,9 @@ def format_dashboard(
             a Per-Track Breakdown section is appended after the Aggregate Score section.
             If both 'metadata' and 'visual_only'/'visual_contradictory' tracks are present,
             a Perception-Reasoning Gap preview is also rendered.
+        cost_report: Optional CostScoreReport from score_dispatch_run(). When provided,
+            a '=== Dispatch Cost Analysis ===' section is appended after the N= summary line.
+            Existing output is unchanged when cost_report is None or omitted.
     """
     lines = []
     lines.append("=== PSAI-Bench Metrics Dashboard ===")
@@ -175,6 +182,27 @@ def format_dashboard(
         f"N={report.n_scenarios} scenarios "
         f"(Threats={report.n_threats}, Benign={report.n_benign}, Ambiguous={report.n_ambiguous})"
     )
+
+    if cost_report is not None:
+        lines.append("")
+        lines.append("=== Dispatch Cost Analysis ===")
+        lines.append(f"  Cost Ratio:      {cost_report.cost_ratio:.4f}  (1.0 = optimal)")
+        lines.append(f"  Total Cost (USD): {cost_report.total_cost_usd:.2f}")
+        lines.append(f"  Mean Cost (USD):  {cost_report.mean_cost_usd:.2f}")
+        lines.append(f"  Optimal Cost:     {cost_report.optimal_cost_usd:.2f}")
+        lines.append(f"  Missing Dispatch: {cost_report.n_missing_dispatch}")
+        lines.append("")
+        lines.append("  Sensitivity Analysis:")
+        for profile_name in ("low", "medium", "high"):
+            p = cost_report.sensitivity_profiles.get(profile_name, {})
+            ratio = p.get("cost_ratio", 0.0)
+            total = p.get("total_cost_usd", 0.0)
+            lines.append(f"    {profile_name.ljust(6)}: ratio={ratio:.4f}  total=${total:.2f}")
+        if cost_report.per_action_counts:
+            lines.append("")
+            lines.append("  Per-Action Counts:")
+            for action, count in sorted(cost_report.per_action_counts.items()):
+                lines.append(f"    {action.ljust(16)}: {count}")
 
     return "\n".join(lines)
 
@@ -584,3 +612,27 @@ def score_multiple_runs(
         summary[f"{metric}_max"] = float(np.max(values))
 
     return summary
+
+
+def score_dispatch_run(
+    scenarios: list[dict],
+    outputs: list[dict],
+    model: CostModel | None = None,
+) -> CostScoreReport:
+    """Score dispatch decisions alongside triage scoring.
+
+    Delegates entirely to cost_model.score_dispatch(). This function
+    exists as the public scorer.py import surface for dispatch evaluation.
+    score_run() is NOT called or modified by this function.
+
+    Args:
+        scenarios: List of scenario dicts from generate (need _meta.ground_truth,
+                   context.site_type, zone.sensitivity, device.false_positive_rate).
+        outputs: List of output dicts (each may have 'dispatch' field).
+        model: Optional CostModel to override default cost table.
+
+    Returns:
+        CostScoreReport with expected cost, optimal cost, cost ratio,
+        per_action_counts, per_site_mean_cost, and sensitivity_profiles.
+    """
+    return _cost_model_score_dispatch(scenarios, outputs, model)
