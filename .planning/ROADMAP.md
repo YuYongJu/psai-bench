@@ -121,8 +121,8 @@ Plans:
   5. All new tests pass in CI across Python 3.10/3.11/3.12
 **Plans**: 2 plans
 Plans:
-- [ ] 07-01-PLAN.md — Shared fixtures and decision stump leakage tests
-- [ ] 07-02-PLAN.md — GT decision function verification and backward compatibility tests
+- [x] 07-01-PLAN.md — Shared fixtures and decision stump leakage tests
+- [x] 07-02-PLAN.md — GT decision function verification and backward compatibility tests
 
 ### Phase 8: Decision Rubric Documentation
 **Goal**: The ground truth assignment logic is published as a human-readable document so any researcher can audit why a given scenario received its label

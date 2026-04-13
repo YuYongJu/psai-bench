@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: Fix the Foundation
+status: planning
+stopped_at: Roadmap created for v2.0, Phase 6 ready to plan
+last_updated: "2026-04-13T05:43:36.238Z"
+last_activity: 2026-04-13
+progress:
+  total_phases: 5
+  completed_phases: 1
+  total_plans: 4
+  completed_plans: 2
+  percent: 50
+---
+
 # State
 
 ## Project Reference
@@ -9,16 +25,17 @@ See: .planning/PROJECT.md (updated 2026-04-13)
 
 ## Current Position
 
-Phase: 6 of 10 (Scenario Generation Rebuild)
-Plan: 0 of ? in current phase
+Phase: 8 of 10 (decision rubric documentation)
+Plan: Not started
 Status: Ready to plan
-Last activity: 2026-04-13 — Milestone v2.0 roadmap created
+Last activity: 2026-04-13
 
 Progress: [██░░░░░░░░] 20% (v1.0 complete, v2.0 not started)
 
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: ~9 (v1.0)
 - Average duration: unknown
 - Total execution time: unknown
@@ -28,6 +45,7 @@ Progress: [██░░░░░░░░] 20% (v1.0 complete, v2.0 not started)
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | v1.0 (1-5) | ~9 | - | - |
+| 07 | 2 | - | - |
 
 *Updated after each plan completion*
 
