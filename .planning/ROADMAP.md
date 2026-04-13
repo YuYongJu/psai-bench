@@ -118,8 +118,8 @@ Plans:
   5. The ground truth assignment function is deterministic: given identical context inputs, it always returns the same label
 **Plans**: 2 plans
 Plans:
-- [ ] 06-01-PLAN.md — Add shared description pools, assign_ground_truth_v2 function, and expand site blocklist in distributions.py
-- [ ] 06-02-PLAN.md — Wire v2 generation path into MetadataGenerator, add adversarial injection, schema _meta_v2, CLI --version flag, version bump to 2.0.0
+- [x] 06-01-PLAN.md — Add shared description pools, assign_ground_truth_v2 function, and expand site blocklist in distributions.py
+- [x] 06-02-PLAN.md — Wire v2 generation path into MetadataGenerator, add adversarial injection, schema _meta_v2, CLI --version flag, version bump to 2.0.0
 
 ### Phase 7: Testing and Verification
 **Goal**: Automated tests confirm that leakage is eliminated across all fields, the decision rubric produces expected labels for known configurations, ambiguous scenario metadata is correct, and default parameters still reproduce v1.0-compatible output
