@@ -28,3 +28,13 @@ def v1_scenarios_default():
     """
     gen = MetadataGenerator(seed=42)
     return gen.generate_ucf_crime(n=3000)
+
+
+@pytest.fixture(scope="session")
+def visual_only_scenarios_200():
+    """200 visual-only scenarios for Phase 12 test suite.
+
+    Uses seed=42 for reproducibility. Generated once per session.
+    """
+    from psai_bench.generators import VisualOnlyGenerator
+    return VisualOnlyGenerator(seed=42).generate(200)
