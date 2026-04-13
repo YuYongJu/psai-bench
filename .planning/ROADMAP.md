@@ -119,7 +119,10 @@ Plans:
   3. `pytest` includes a test that runs `psai-bench generate --seed 42` with no flags and asserts the output matches v1.0 schema and category distributions
   4. `pytest` includes a test that generates scenarios and asserts all ambiguous-flagged scenarios have `_meta.ambiguity_flag = true` and `GT = SUSPICIOUS`
   5. All new tests pass in CI across Python 3.10/3.11/3.12
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 07-01-PLAN.md — Shared fixtures and decision stump leakage tests
+- [ ] 07-02-PLAN.md — GT decision function verification and backward compatibility tests
 
 ### Phase 8: Decision Rubric Documentation
 **Goal**: The ground truth assignment logic is published as a human-readable document so any researcher can audit why a given scenario received its label
@@ -167,7 +170,7 @@ Phases execute strictly in numeric order: 6 → 7 → 8 → 9 → 10
 | 4. GitHub Actions CI | v1.0 | ?/? | Complete | 2026-04-13 |
 | 5. Documentation + Release | v1.0 | ?/? | Complete | 2026-04-13 |
 | 6. Scenario Generation Rebuild | v2.0 | 0/2 | Not started | - |
-| 7. Testing and Verification | v2.0 | 0/? | Not started | - |
+| 7. Testing and Verification | v2.0 | 0/2 | Not started | - |
 | 8. Decision Rubric Documentation | v2.0 | 0/? | Not started | - |
 | 9. Scoring and Schema Updates | v2.0 | 0/? | Not started | - |
 | 10. Documentation and Release | v2.0 | 0/? | Not started | - |
