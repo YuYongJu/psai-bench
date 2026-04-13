@@ -5,7 +5,7 @@
 - ✅ **v1.0 Release** - Phases 1-5 (shipped 2026-04-13)
 - ✅ **v2.0 Fix the Foundation** — Phases 6-10 (shipped 2026-04-13)
 - ✅ **v3.0 Perception-Reasoning Gap** — Phases 11-17 (shipped 2026-04-13)
-- 🔄 **v4.0 Operational Realism** — Phases 18-22 (in progress)
+- ✅ **v4.0 Operational Realism** — Phases 18-22 (shipped 2026-04-13)
 
 ## Phases
 
