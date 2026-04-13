@@ -937,6 +937,198 @@ class ContradictoryGenerator:
         return scenarios
 
 
+class TemporalSequenceGenerator:
+    """Generate Temporal Sequence Track scenarios for Phase 14.
+
+    Produces groups of 3-5 related alerts threaded by sequence_id with monotonically
+    increasing timestamps and three escalation narrative patterns:
+    - monotonic_escalation: alerts escalate from LOW/MEDIUM to HIGH severity
+    - escalation_then_resolution: escalates to peak then resolves with badge scan
+    - false_alarm: starts high-severity, subsequent alerts show it was benign
+
+    The escalation_pattern stored in _meta gives Phase 15's score_sequences() the
+    label it needs to measure escalation latency and resolution detection.
+
+    RNG isolation: owns its own np.random.RandomState (Pitfall 4).
+    """
+
+    def __init__(self, seed: int = 42):
+        self.rng = np.random.RandomState(seed)
+        self.seed = seed
+
+    def generate(self, n_sequences: int = 50) -> list[dict]:
+        """Generate n_sequences temporal sequences, returning a flat list of alerts."""
+        alerts = []
+        global_index = 0
+        patterns = ["monotonic_escalation", "escalation_then_resolution", "false_alarm"]
+        for seq_idx in range(n_sequences):
+            pattern = patterns[seq_idx % 3]
+            seq_alerts = self._build_sequence(seq_idx, pattern, global_index)
+            alerts.extend(seq_alerts)
+            global_index += len(seq_alerts)
+        return alerts
+
+    def _build_sequence(self, seq_idx: int, pattern: str, start_index: int) -> list[dict]:
+        """Build a single temporal sequence of 3-5 alerts."""
+        from psai_bench.distributions import (
+            DESCRIPTION_POOL_AMBIGUOUS,
+            DESCRIPTION_POOL_UNAMBIGUOUS_BENIGN,
+            DESCRIPTION_POOL_UNAMBIGUOUS_THREAT,
+            DEVICE_FPR,
+            DEVICE_QUALITY_WEIGHTS,
+            assign_ground_truth_v2,
+        )
+
+        seq_length = int(self.rng.randint(3, 6))  # 3, 4, or 5
+        # turn_point: 1-indexed, in range [2, seq_length-1] (numpy randint exclusive of high)
+        # For seq_length=3: randint(2, 3) always gives 2. For seq_length=5: gives 2, 3, or 4.
+        # This guarantees at least one post-turn alert exists.
+        turn_point = int(self.rng.randint(2, seq_length))
+
+        # Sample shared per-sequence context
+        categories = list(UCF_CATEGORY_MAP.keys())
+        category = self.rng.choice(categories)
+        site_type = _sample_valid_site(category, self.rng)
+        zone_sensitivity = int(self.rng.choice([1, 2, 3, 4, 5]))  # base sensitivity
+
+        # Device sampling (shared across sequence)
+        quality = self.rng.choice(
+            ["low_quality", "mid_quality", "high_quality"], p=DEVICE_QUALITY_WEIGHTS
+        )
+        mean_fpr, std_fpr = DEVICE_FPR[quality]
+        device_fpr = float(np.clip(self.rng.normal(mean_fpr, std_fpr), 0.01, 0.99))
+        device_type = quality  # e.g. "low_quality", "mid_quality", "high_quality"
+
+        # Base timestamp and interval
+        base_time_str = _generate_timestamp("day", self.rng)
+        base_dt = datetime.fromisoformat(base_time_str)
+        interval_minutes = int(self.rng.randint(5, 21))
+
+        # Weather sampled once per sequence
+        weather = sample_weather("day", self.rng)
+
+        alerts = []
+        for pos in range(1, seq_length + 1):
+            # Determine signal trajectory based on pattern and position
+            if pattern == "monotonic_escalation":
+                if pos < turn_point:
+                    severity = self.rng.choice(["LOW", "MEDIUM"])
+                    zone_type = self.rng.choice(["lobby", "parking"])
+                    time_of_day = self.rng.choice(["day", "evening"])
+                    badge_access_minutes_ago = None
+                    description = self.rng.choice(DESCRIPTION_POOL_AMBIGUOUS)
+                else:
+                    severity = "HIGH"
+                    zone_type = "restricted"
+                    time_of_day = "night"
+                    badge_access_minutes_ago = None
+                    description = self.rng.choice(DESCRIPTION_POOL_UNAMBIGUOUS_THREAT)
+
+            elif pattern == "escalation_then_resolution":
+                if pos <= turn_point:
+                    severity = "LOW" if pos == 1 else "HIGH"
+                    zone_type = "restricted"
+                    time_of_day = "night"
+                    badge_access_minutes_ago = None
+                    if pos == turn_point:
+                        description = self.rng.choice(DESCRIPTION_POOL_UNAMBIGUOUS_THREAT)
+                    else:
+                        description = self.rng.choice(DESCRIPTION_POOL_AMBIGUOUS)
+                else:
+                    severity = "LOW"
+                    zone_type = "restricted"
+                    time_of_day = "night"
+                    badge_access_minutes_ago = int(self.rng.randint(3, 10))
+                    description = self.rng.choice(DESCRIPTION_POOL_UNAMBIGUOUS_BENIGN)
+
+            else:  # false_alarm
+                if pos == 1:
+                    severity = self.rng.choice(["HIGH", "CRITICAL"])
+                    zone_type = "restricted"
+                    time_of_day = "night"
+                    badge_access_minutes_ago = None
+                    description = self.rng.choice(DESCRIPTION_POOL_UNAMBIGUOUS_THREAT)
+                else:
+                    severity = "LOW"
+                    zone_type = self.rng.choice(["parking", "lobby"])
+                    time_of_day = "day"
+                    badge_access_minutes_ago = int(self.rng.randint(1, 8))
+                    description = self.rng.choice(DESCRIPTION_POOL_UNAMBIGUOUS_BENIGN)
+
+            # Compute GT for this alert's signals
+            gt, weighted_sum, _ = assign_ground_truth_v2(
+                zone_type=zone_type,
+                zone_sensitivity=zone_sensitivity,
+                time_of_day=time_of_day,
+                device_fpr=device_fpr,
+                severity=severity,
+                badge_access_minutes_ago=badge_access_minutes_ago,
+                rng=self.rng,
+            )
+
+            difficulty = _assign_difficulty(
+                category, zone_sensitivity, time_of_day, device_fpr, self.rng,
+                dataset="ucf_crime",
+            )
+
+            # Compute strictly increasing timestamp for this position
+            ts = base_dt + timedelta(minutes=interval_minutes * (pos - 1))
+            timestamp = ts.isoformat()
+
+            recent_events = _generate_recent_events(zone_type, time_of_day, self.rng)
+            badge_events = (
+                [] if badge_access_minutes_ago is None
+                else [{"minutes_ago": badge_access_minutes_ago}]
+            )
+
+            alert = {
+                "alert_id": f"ucf-temporal-{seq_idx:04d}-{pos:02d}",
+                "timestamp": timestamp,
+                "track": "temporal",
+                "severity": severity,
+                "description": description,
+                "source_type": "camera",
+                "zone": {
+                    "zone_id": f"zone-{seq_idx:04d}",
+                    "zone_type": zone_type,
+                    "zone_sensitivity": zone_sensitivity,
+                },
+                "device": {
+                    "device_id": f"cam-{seq_idx:04d}-{pos:02d}",
+                    "device_type": device_type,
+                    "fpr": round(device_fpr, 3),
+                },
+                "context": {
+                    "recent_zone_events_1h": recent_events,
+                    "recent_badge_access_1h": badge_events,
+                    "weather": weather,
+                    "time_of_day": time_of_day,
+                    "expected_activities": EXPECTED_ACTIVITIES.get(site_type, []),
+                    "cross_zone_activity": {},
+                    "site_type": site_type,
+                },
+                "visual_data": None,
+                "additional_sensors": [],
+                "_meta": {
+                    "ground_truth": gt,
+                    "weighted_sum": weighted_sum,
+                    "difficulty": difficulty,
+                    "source_dataset": "ucf_crime",
+                    "source_category": category,
+                    "seed": self.seed,
+                    "index": start_index + (pos - 1),
+                    "generation_version": "v3",
+                    "sequence_id": f"seq-{seq_idx:04d}",
+                    "sequence_position": pos,
+                    "sequence_length": seq_length,
+                    "escalation_pattern": pattern,
+                },
+            }
+            alerts.append(alert)
+
+        return alerts
+
+
 class MultiSensorGenerator:
     """Generate Multi-Sensor Track scenarios with fused sensor data."""
 
