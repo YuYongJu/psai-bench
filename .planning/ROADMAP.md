@@ -140,10 +140,10 @@ Plans:
   2. Each visual-only scenario's `_meta.visual_gt_source` equals `"video_category"` and GT matches the UCF Crime category mapping
   3. `test_leakage.py` passes on a visual-only scenario batch — no single field achieves >70% stump accuracy in predicting GT
   4. `VisualOnlyGenerator(seed=42)` produces identical output on two consecutive runs (RNG isolation confirmed)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 12-01: Implement VisualOnlyGenerator with isolated RNG, UCF Crime GT derivation, and shared description pool sampling
+- [ ] 12-01-PLAN.md — Implement VisualOnlyGenerator (generators.py + cli.py) and test suite (conftest.py + test_visual_only.py)
 
 ### Phase 13: Contradictory Scenarios
 **Goal**: Users can generate contradictory scenarios where metadata and video content deliberately disagree and GT always follows the video content label
