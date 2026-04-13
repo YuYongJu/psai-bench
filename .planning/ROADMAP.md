@@ -77,9 +77,9 @@ Plans:
   4. `ruff check .` and `pytest` both run as separate CI steps without failures
 **Plans**: 3 plans
 Plans:
-- [ ] 09-01-PLAN.md — Simplify OUTPUT_SCHEMA and update validation logic
-- [ ] 09-02-PLAN.md — Scoring engine: ambiguous partition, Decisiveness, new aggregate, format_dashboard
-- [ ] 09-03-PLAN.md — Wire dashboard to CLI, delete stale commands, update tests
+- [x] 09-01-PLAN.md — Simplify OUTPUT_SCHEMA and update validation logic
+- [x] 09-02-PLAN.md — Scoring engine: ambiguous partition, Decisiveness, new aggregate, format_dashboard
+- [x] 09-03-PLAN.md — Wire dashboard to CLI, delete stale commands, update tests
 
 ### Phase 5: Documentation + Release
 **Goal**: PSAI-Bench is publicly presentable — a researcher landing on the repo immediately understands the research contribution, can reproduce results, and can cite the work
@@ -96,14 +96,14 @@ Plans:
 
 ---
 
-### 🚧 v2.0 Fix the Foundation (In Progress)
+### ✅ v2.0 Fix the Foundation (Complete)
 
 **Milestone Goal:** Rebuild the benchmark's scientific foundation so results are meaningful — context-dependent ground truth, no single-field leakage, transparent scoring, system-agnostic design.
 
-- [ ] **Phase 6: Scenario Generation Rebuild** - Replace hardcoded GT lookup with a context-dependent decision function and shared description pool
-- [ ] **Phase 7: Testing and Verification** - Verify leakage is eliminated, backward compatibility holds, and ambiguous scenario metadata is correct
-- [ ] **Phase 8: Decision Rubric Documentation** - Publish the GT assignment logic as a standalone document with worked examples
-- [ ] **Phase 9: Scoring and Schema Updates** - Replace opaque aggregate with separate metrics dashboard and simplify output schema
+- [x] **Phase 6: Scenario Generation Rebuild** - Replace hardcoded GT lookup with a context-dependent decision function and shared description pool (completed 2026-04-13)
+- [x] **Phase 7: Testing and Verification** - Verify leakage is eliminated, backward compatibility holds, and ambiguous scenario metadata is correct (completed 2026-04-13)
+- [x] **Phase 8: Decision Rubric Documentation** - Publish the GT assignment logic as a standalone document with worked examples (completed 2026-04-13)
+- [x] **Phase 9: Scoring and Schema Updates** - Replace opaque aggregate with separate metrics dashboard and simplify output schema (completed 2026-04-13)
 - [x] **Phase 10: Documentation and Release** - Update README for BYOS workflow, document built-in evaluators as examples, publish v2.0 (completed 2026-04-13)
 
 ### Phase 6: Scenario Generation Rebuild
@@ -160,9 +160,9 @@ Plans:
   5. A minimal output file containing only `alert_id`, `verdict`, and `confidence` passes schema validation without errors
 **Plans**: 3 plans
 Plans:
-- [ ] 09-01-PLAN.md — Simplify OUTPUT_SCHEMA and update validation logic
-- [ ] 09-02-PLAN.md — Scoring engine: ambiguous partition, Decisiveness, new aggregate, format_dashboard
-- [ ] 09-03-PLAN.md — Wire dashboard to CLI, delete stale commands, update tests
+- [x] 09-01-PLAN.md — Simplify OUTPUT_SCHEMA and update validation logic
+- [x] 09-02-PLAN.md — Scoring engine: ambiguous partition, Decisiveness, new aggregate, format_dashboard
+- [x] 09-03-PLAN.md — Wire dashboard to CLI, delete stale commands, update tests
 
 ### Phase 10: Documentation and Release
 **Goal**: The repository communicates the BYOS workflow as the primary path, built-in evaluators are correctly positioned as examples, v2.0 results are accurately represented, and known limitations are honest
@@ -190,8 +190,8 @@ Phases execute strictly in numeric order: 6 → 7 → 8 → 9 → 10
 | 3. Test Coverage Expansion | v1.0 | ?/? | Complete | 2026-04-13 |
 | 4. GitHub Actions CI | v1.0 | ?/? | Complete | 2026-04-13 |
 | 5. Documentation + Release | v1.0 | ?/? | Complete | 2026-04-13 |
-| 6. Scenario Generation Rebuild | v2.0 | 0/2 | Not started | - |
-| 7. Testing and Verification | v2.0 | 0/2 | Not started | - |
-| 8. Decision Rubric Documentation | v2.0 | 0/1 | Not started | - |
-| 9. Scoring and Schema Updates | v2.0 | 0/3 | Not started | - |
+| 6. Scenario Generation Rebuild | v2.0 | 2/2 | Complete | 2026-04-13 |
+| 7. Testing and Verification | v2.0 | 2/2 | Complete | 2026-04-13 |
+| 8. Decision Rubric Documentation | v2.0 | 1/1 | Complete | 2026-04-13 |
+| 9. Scoring and Schema Updates | v2.0 | 3/3 | Complete | 2026-04-13 |
 | 10. Documentation and Release | v2.0 | 1/1 | Complete    | 2026-04-13 |
