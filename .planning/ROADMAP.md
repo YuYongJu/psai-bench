@@ -153,7 +153,10 @@ Plans:
   2. All 3 behavioral adversarial pattern types appear in a generation batch of 50 scenarios (no single type dominates 100%)
   3. Running `--seed 42 --track adversarial_v4` twice produces byte-identical output, and running `--seed 42 --track standard` continues to produce the same output as it did in v3.0 (isolated RNG confirmed)
   4. `_meta.adversarial_type` for a v2 scenario reads `signal_conflict`; for a v4 scenario reads one of the 3 behavioral types — never mixed
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 20-01-PLAN.md — Track enum extension (adversarial_v4) + ADV_V4_* description pools in distributions.py
+- [ ] 20-02-PLAN.md — AdversarialV4Generator class + CLI adversarial_v4 track wiring
 
 ### Phase 21: Multi-Site Generalization
 **Goal**: Users can measure how well a system trained on one site type generalizes to another, and confidence in that metric is backed by a leakage audit confirming site identity is not inferable from non-site features
@@ -183,6 +186,6 @@ Plans:
 |-------|----------------|--------|-----------|
 | 18. Schema and Cost Model Foundation | 2/2 | Complete    | 2026-04-13 |
 | 19. Scoring Pipeline and Baselines | 2/2 | Complete    | 2026-04-13 |
-| 20. Adversarial v4 Generator | 0/? | Not started | - |
+| 20. Adversarial v4 Generator | 0/2 | Not started | - |
 | 21. Multi-Site Generalization | 0/? | Not started | - |
 | 22. CLI Integration, Tests, and Documentation | 0/? | Not started | - |
