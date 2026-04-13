@@ -1,95 +1,117 @@
-# Requirements: PSAI-Bench
+# Requirements: PSAI-Bench v2.0
 
-**Defined:** 2026-04-12
-**Core Value:** Rigorous benchmark revealing whether AI video analysis adds real value to physical security triage
+**Defined:** 2026-04-13
+**Core Value:** Non-trivially-solvable benchmark where no single input field reveals ground truth
 
-## v1 Requirements
+## v2.0 Requirements
 
-Requirements for open-source release. Each maps to roadmap phases.
+### Scenario Generation
 
-### Repository Hygiene
+- [ ] **SCEN-01**: Ground truth is determined by a documented decision function combining description + zone + time + device + severity, not by category alone
+- [ ] **SCEN-02**: Description pool is shared across all GT classes — same description appears with THREAT, SUSPICIOUS, and BENIGN ground truth in different contexts
+- [ ] **SCEN-03**: Severity correlates with ground truth at ~70% (not 100%) — some scenarios have deliberately misleading severity
+- [ ] **SCEN-04**: Adversarial scenarios exist with 2+ conflicting signals (e.g., HIGH severity + BENIGN GT, LOW severity + THREAT GT, night + restricted zone + recent badge = BENIGN)
+- [ ] **SCEN-05**: Single-field decision stump accuracy is below 70% for every field (description, severity, zone, time, device FPR) — verified by automated test
+- [ ] **SCEN-06**: Site-inappropriate categories are eliminated (no shoplifting at solar farms, no road accidents indoors)
+- [ ] **SCEN-07**: Default parameters (seed=42, no flags) still produce v1.0-compatible output for backward compatibility
 
-- [ ] **REPO-01**: All ruff lint errors fixed (12 errors: unused imports, f-strings, unused variable)
-- [ ] **REPO-02**: Generated data removed from git tracking and .gitignore updated (data/generated/, .coverage, .ruff_cache/, *.egg-info/)
-- [ ] **REPO-03**: Git history rewritten to purge 16MB of generated JSON before public push
+### Ground Truth
+
+- [ ] **GT-01**: Published decision rubric document explains the ground truth assignment logic with worked examples
+- [ ] **GT-02**: Scenarios flagged as "ambiguous by design" (reasonable operators would disagree) get GT=SUSPICIOUS with an ambiguity flag in _meta
+- [ ] **GT-03**: Ground truth assignment function is deterministic given scenario context (not random)
+
+### Scoring
+
+- [ ] **SCORE-01**: Metrics reported as a dashboard (TDR, FASR, Decisiveness, Calibration, per-difficulty accuracy) — not collapsed into a single opaque aggregate
+- [ ] **SCORE-02**: Decisiveness metric replaces SUSPICIOUS penalty: fraction of predictions that are THREAT or BENIGN (not SUSPICIOUS)
+- [ ] **SCORE-03**: If aggregate score is computed, it uses published additive weights with documented justification
+- [ ] **SCORE-04**: Scoring handles ambiguous-flagged scenarios separately (system that says THREAT or BENIGN on an ambiguous scenario is not penalized — it made a decisive call under uncertainty)
+
+### Output Schema
+
+- [ ] **SCHEMA-01**: Reasoning field is optional (not required, no minimum word count)
+- [ ] **SCHEMA-02**: Confidence field definition is explicit in schema: "probability that the verdict is correct"
+- [ ] **SCHEMA-03**: Processing_time_ms is optional
+- [ ] **SCHEMA-04**: Schema validates correctly for minimal outputs (alert_id + verdict + confidence only)
 
 ### Documentation
 
-- [ ] **DOCS-01**: README.md with research claim lead, results table, quickstart, architecture overview, BibTeX citation, 3 badges (Python version, License, CI status)
-- [ ] **DOCS-02**: LICENSE file with full Apache-2.0 text
-- [ ] **DOCS-03**: CONTRIBUTING.md with development setup, testing instructions, and PR guidelines
-- [ ] **DOCS-04**: CODE_OF_CONDUCT.md (Contributor Covenant v2.1)
-- [ ] **DOCS-05**: CHANGELOG.md documenting v1.0 release
+- [ ] **DOCS-01**: README reframed around "Bring Your Own System" workflow: generate → run YOUR system → score
+- [ ] **DOCS-02**: Built-in evaluators documented as reference implementations / examples, not the canonical path
+- [ ] **DOCS-03**: Decision rubric published as a standalone document
+- [ ] **DOCS-04**: Results table updated with v2.0 scenarios (or removed if no evaluations run yet)
+- [ ] **DOCS-05**: Known limitations section honest about what v2.0 does and doesn't test
 
-### Packaging
+### Testing
 
-- [ ] **PKG-01**: pyproject.toml updated with authors, project URLs, classifiers, keywords, readme=README.md, tightened ruff pin
-- [ ] **PKG-02**: GitHub Actions CI workflow (pytest + ruff on Python 3.10/3.11/3.12, coverage upload to codecov)
-- [ ] **PKG-03**: Pre-commit configuration with ruff-check and ruff-format hooks
+- [ ] **TEST-01**: Automated test verifies no single field achieves >70% decision stump accuracy on generated scenarios
+- [ ] **TEST-02**: Tests verify decision rubric produces expected GT for known scenario configurations
+- [ ] **TEST-03**: Tests verify backward compatibility — default params produce same output as v1.0
+- [ ] **TEST-04**: Tests verify ambiguous-flagged scenarios have correct metadata
 
-### Quality
+## v3.0 Requirements (Deferred)
 
-- [ ] **QUAL-01**: Test coverage expanded for CLI commands (from 0% to meaningful coverage)
-- [ ] **QUAL-02**: Test coverage expanded for statistics module (from 48% to >80%)
-- [ ] **QUAL-03**: NumPy RNG version documented or pinned for reproducible scenario generation
+### Visual Track
 
-### Release
+- **VIS-01**: Visual-only scenarios (no description/severity, just video + minimal metadata)
+- **VIS-02**: Contradictory scenarios (metadata says X, video shows Y)
+- **VIS-03**: Frame extraction baseline for comparison
 
-- [ ] **REL-01**: Version bumped from 1.0.0rc1 to 1.0.0
-- [ ] **REL-02**: Clean install from scratch verified (pip install . works, psai-bench CLI functional, all tests pass)
+### Temporal
 
-## v2 Requirements
-
-Deferred to future release. Tracked but not in current roadmap.
-
-### Extended Evaluations
-
-- **EVAL-01**: Run Claude Sonnet and Gemini Flash evaluations on metadata track
-- **EVAL-02**: Run visual track evaluations to measure perception-reasoning gap
-- **EVAL-03**: Multi-run consistency analysis (5 runs per model)
-
-### Publication
-
-- **PUB-01**: PyPI package publication with publish workflow
-- **PUB-02**: arXiv preprint submission
-- **PUB-03**: Interactive results leaderboard
+- **TEMP-01**: Alert sequences (3-5 related alerts building a narrative)
+- **TEMP-02**: Escalation pattern testing
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Jupyter notebooks | Maintenance burden without proportional value for CLI-first tool |
-| Sphinx/mkdocs documentation site | Over-engineering for a benchmark tool; README is sufficient |
-| Web dashboard | CLI-first design; not needed for v1.0 |
-| OAuth/API key management UI | CLI env vars are standard for benchmark tools |
-| Docker containerization | pip install is sufficient for Python package |
+| Running model evaluations | User's job — benchmark provides scenarios and scoring only |
+| Web dashboard | CLI-first design; not needed for v2.0 |
+| Dispatch decisions (5 action types) | v4.0 — requires operational research |
+| Cost-aware scoring ($/decision) | v4.0 — requires cost model |
+| Video processing implementation | v3.0 — requires visual track redesign |
+| Adversarial robustness (evasion attacks) | v4.0 |
+| Multi-annotator ground truth | Would be ideal but requires human annotators — out of scope |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REPO-01 | Phase 1 | Pending |
-| REPO-02 | Phase 1 | Pending |
-| REPO-03 | Phase 1 | Pending |
-| DOCS-02 | Phase 2 | Pending |
-| PKG-01 | Phase 2 | Pending |
-| PKG-03 | Phase 2 | Pending |
-| QUAL-01 | Phase 3 | Pending |
-| QUAL-02 | Phase 3 | Pending |
-| QUAL-03 | Phase 3 | Pending |
-| PKG-02 | Phase 4 | Pending |
-| DOCS-01 | Phase 5 | Pending |
-| DOCS-03 | Phase 5 | Pending |
-| DOCS-04 | Phase 5 | Pending |
-| DOCS-05 | Phase 5 | Pending |
-| REL-01 | Phase 5 | Pending |
-| REL-02 | Phase 5 | Pending |
+| SCEN-01 | Phase 6 | Pending |
+| SCEN-02 | Phase 6 | Pending |
+| SCEN-03 | Phase 6 | Pending |
+| SCEN-04 | Phase 6 | Pending |
+| SCEN-05 | Phase 7 | Pending |
+| SCEN-06 | Phase 6 | Pending |
+| SCEN-07 | Phase 7 | Pending |
+| GT-01 | Phase 8 | Pending |
+| GT-02 | Phase 6 | Pending |
+| GT-03 | Phase 6 | Pending |
+| SCORE-01 | Phase 9 | Pending |
+| SCORE-02 | Phase 9 | Pending |
+| SCORE-03 | Phase 9 | Pending |
+| SCORE-04 | Phase 9 | Pending |
+| SCHEMA-01 | Phase 9 | Pending |
+| SCHEMA-02 | Phase 9 | Pending |
+| SCHEMA-03 | Phase 9 | Pending |
+| SCHEMA-04 | Phase 9 | Pending |
+| DOCS-01 | Phase 10 | Pending |
+| DOCS-02 | Phase 10 | Pending |
+| DOCS-03 | Phase 10 | Pending |
+| DOCS-04 | Phase 10 | Pending |
+| DOCS-05 | Phase 10 | Pending |
+| TEST-01 | Phase 7 | Pending |
+| TEST-02 | Phase 7 | Pending |
+| TEST-03 | Phase 7 | Pending |
+| TEST-04 | Phase 7 | Pending |
 
 **Coverage:**
-- v1 requirements: 16 total
-- Mapped to phases: 16
+- v2.0 requirements: 26 total
+- Mapped to phases: 26
 - Unmapped: 0 ✓
 
 ---
-*Requirements defined: 2026-04-12*
-*Last updated: 2026-04-12 after initial definition*
+*Requirements defined: 2026-04-13*
+*Last updated: 2026-04-13 after initial definition*
