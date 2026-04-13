@@ -101,9 +101,9 @@ def validate_submission(
             if not isinstance(conf, (int, float)) or conf < 0 or conf > 1:
                 bad_confidence.append(aid)
 
-        # Reasoning length
-        reasoning = out.get("reasoning", "")
-        if len(reasoning.split()) < 20:
+        # Reasoning length (only checked when reasoning is present and non-empty)
+        reasoning = out.get("reasoning")
+        if reasoning and len(reasoning.split()) < 20:
             short_reasoning.append(aid)
 
         # Full schema validation
@@ -142,7 +142,7 @@ def validate_submission(
     if susp_frac > 0.30:
         report.warn(
             f"SUSPICIOUS fraction is {susp_frac:.1%} (>{30:.0%}). "
-            f"Aggregate score will receive penalty per Section 4.5."
+            f"High SUSPICIOUS fraction reduces Decisiveness metric."
         )
 
     return report
