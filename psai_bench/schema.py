@@ -129,6 +129,26 @@ OUTPUT_SCHEMA = {
 VERDICTS = ("THREAT", "SUSPICIOUS", "BENIGN")
 DIFFICULTIES = ("easy", "medium", "hard")
 
+# _meta block structure (not schema-validated — benchmark-internal only).
+# v2 adds generation_version, weighted_sum, adversarial, ambiguity_flag, description_category.
+_META_SCHEMA_V2 = {
+    "type": "object",
+    "properties": {
+        "ground_truth": {"type": "string", "enum": ["THREAT", "SUSPICIOUS", "BENIGN"]},
+        "difficulty": {"type": "string", "enum": ["easy", "medium", "hard"]},
+        "source_dataset": {"type": "string"},
+        "source_category": {"type": "string"},
+        "seed": {"type": "integer"},
+        "index": {"type": "integer"},
+        "generation_version": {"type": "string"},
+        "weighted_sum": {"type": "number"},
+        "adversarial": {"type": "boolean"},
+        "ambiguity_flag": {"type": "boolean"},
+        "description_category": {"type": "string"},
+    },
+    "required": ["ground_truth", "difficulty", "source_dataset", "source_category", "seed", "index"],
+}
+
 
 def validate_alert(alert: dict) -> None:
     """Validate an alert against the PSAI-Bench Alert Schema. Raises ValidationError."""

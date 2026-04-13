@@ -49,9 +49,11 @@ CALTECH_DIFFICULTY_RULES = {
 # Categories that are implausible at certain site types.
 # If a combo is drawn, resample the site type instead of generating nonsense.
 SITE_CATEGORY_BLOCKLIST = {
-    "solar": {"Shoplifting", "Robbery", "Arrest"},
+    "solar": {"Shoplifting", "Robbery", "Arrest", "RoadAccidents"},
     "substation": {"Shoplifting", "Robbery", "Arrest"},
-    "industrial": {"Shoplifting"},
+    "industrial": {"Shoplifting", "RoadAccidents"},
+    "commercial": {"RoadAccidents"},
+    "campus": {"RoadAccidents"},
 }
 
 
@@ -152,12 +154,48 @@ def _generate_recent_events(
     return events
 
 
+def _inject_adversarial_signals(
+    base_severity: str,
+    zone_type: str,
+    zone_sensitivity: int,
+    time_of_day: str,
+    device_fpr: float,
+    rng: np.random.RandomState,
+) -> tuple[str, str, int, str, float]:
+    """Override one context signal to create a conflicting scenario (SCEN-04)."""
+    flip_choice = rng.randint(0, 3)
+
+    if flip_choice == 0:
+        if zone_type in ("restricted", "utility") or time_of_day == "night":
+            new_severity = "LOW"
+        else:
+            new_severity = "HIGH"
+        return new_severity, zone_type, zone_sensitivity, time_of_day, device_fpr
+    elif flip_choice == 1:
+        if base_severity in ("HIGH", "CRITICAL"):
+            new_zone = "parking"
+            new_sens = rng.randint(1, 3)
+        else:
+            new_zone = "restricted"
+            new_sens = min(rng.randint(4, 6), 5)
+        return base_severity, new_zone, new_sens, time_of_day, device_fpr
+    else:
+        if zone_type in ("restricted", "utility"):
+            new_time = "day"
+            new_fpr = float(np.clip(rng.normal(0.88, 0.05), 0.70, 0.99))
+        else:
+            new_time = "night"
+            new_fpr = float(np.clip(rng.normal(0.12, 0.05), 0.01, 0.30))
+        return base_severity, zone_type, zone_sensitivity, new_time, new_fpr
+
+
 class MetadataGenerator:
     """Generate Metadata Track scenarios from UCF Crime and Caltech Camera Traps annotations."""
 
-    def __init__(self, seed: int = 42):
+    def __init__(self, seed: int = 42, version: str = "v1"):
         self.rng = np.random.RandomState(seed)
         self.seed = seed
+        self.version = version
 
     def generate_ucf_crime(self, n: int = 3000) -> list[dict]:
         """Generate n metadata-only scenarios derived from UCF Crime categories.
@@ -166,6 +204,8 @@ class MetadataGenerator:
         categories proportionally to the test set distribution, then generate
         full alert metadata for each.
         """
+        if self.version == "v2":
+            return self.generate_ucf_crime_v2(n)
         categories = list(UCF_CATEGORY_MAP.keys())
         # Weight Normal higher to match real-world class imbalance (most alerts are benign)
         weights = [1.0] * (len(categories) - 1) + [4.0]
@@ -230,6 +270,136 @@ class MetadataGenerator:
                     "source_category": cat,
                     "seed": self.seed,
                     "index": i,
+                },
+            }
+            scenarios.append(alert)
+
+        return scenarios
+
+    def generate_ucf_crime_v2(self, n: int = 3000) -> list[dict]:
+        """Generate n v2 scenarios with context-dependent GT and shared description pool."""
+        from psai_bench.distributions import (
+            DESCRIPTION_POOL_AMBIGUOUS,
+            DESCRIPTION_POOL_UNAMBIGUOUS_BENIGN,
+            DESCRIPTION_POOL_UNAMBIGUOUS_THREAT,
+            assign_ground_truth_v2,
+        )
+
+        categories = list(UCF_CATEGORY_MAP.keys())
+        weights = [1.0] * (len(categories) - 1) + [4.0]
+        weights = np.array(weights) / sum(weights)
+
+        adversarial_flags = self.rng.random(n) < 0.20
+
+        scenarios = []
+        for i in range(n):
+            cat = self.rng.choice(categories, p=weights)
+
+            desc_type_roll = self.rng.random()
+            if desc_type_roll < 0.70:
+                description = self.rng.choice(DESCRIPTION_POOL_AMBIGUOUS)
+                desc_category = "ambiguous"
+            elif desc_type_roll < 0.85:
+                description = self.rng.choice(DESCRIPTION_POOL_UNAMBIGUOUS_THREAT)
+                desc_category = "unambiguous_threat"
+            else:
+                description = self.rng.choice(DESCRIPTION_POOL_UNAMBIGUOUS_BENIGN)
+                desc_category = "unambiguous_benign"
+
+            severity_range = UCF_CATEGORY_MAP[cat]["severity_range"]
+            severity = self.rng.choice(severity_range)
+
+            time_of_day = self.rng.choice(TOD_OPTIONS, p=[0.25, 0.35, 0.20, 0.20])
+            zone = sample_zone(self.rng)
+            device = sample_device(zone["type"], self.rng)
+            weather = sample_weather(time_of_day, self.rng)
+
+            site_type = sample_site_type(self.rng)
+            for _ in range(10):
+                blocked = SITE_CATEGORY_BLOCKLIST.get(site_type, set())
+                if cat not in blocked:
+                    break
+                site_type = sample_site_type(self.rng)
+
+            badge_roll = self.rng.random()
+            if badge_roll < 0.20:
+                badge_minutes_ago = int(self.rng.randint(1, 10))
+            elif badge_roll < 0.40:
+                badge_minutes_ago = int(self.rng.randint(10, 30))
+            else:
+                badge_minutes_ago = None
+
+            is_adversarial = bool(adversarial_flags[i])
+            if is_adversarial:
+                severity, adj_zone_type, adj_sensitivity, time_of_day, adj_fpr = (
+                    _inject_adversarial_signals(
+                        severity, zone["type"], zone["sensitivity"],
+                        time_of_day, device["false_positive_rate"], self.rng,
+                    )
+                )
+                zone["type"] = adj_zone_type
+                zone["sensitivity"] = adj_sensitivity
+                device["false_positive_rate"] = round(adj_fpr, 3)
+
+            gt, weighted_sum, is_ambiguous = assign_ground_truth_v2(
+                zone_type=zone["type"],
+                zone_sensitivity=zone["sensitivity"],
+                time_of_day=time_of_day,
+                device_fpr=device["false_positive_rate"],
+                severity=severity,
+                badge_access_minutes_ago=badge_minutes_ago,
+                rng=self.rng,
+            )
+
+            difficulty = _assign_difficulty(
+                cat, zone["sensitivity"], time_of_day,
+                device["false_positive_rate"], self.rng, dataset="ucf_crime",
+            )
+            if is_adversarial and difficulty == "easy":
+                difficulty = "medium"
+
+            badge_access_events = []
+            if badge_minutes_ago is not None:
+                badge_access_events = [{
+                    "minutes_ago": badge_minutes_ago,
+                    "event_type": "badge_granted",
+                    "resolved": True,
+                }]
+
+            alert = {
+                "alert_id": f"ucf-meta-v2-{i:05d}",
+                "timestamp": _generate_timestamp(time_of_day, self.rng),
+                "track": "metadata",
+                "severity": severity,
+                "description": description,
+                "source_type": "camera",
+                "zone": zone,
+                "device": device,
+                "context": {
+                    "recent_zone_events_1h": _generate_recent_events(
+                        zone["type"], time_of_day, self.rng
+                    ),
+                    "recent_badge_access_1h": badge_access_events,
+                    "weather": weather,
+                    "time_of_day": time_of_day,
+                    "expected_activities": EXPECTED_ACTIVITIES.get(site_type, []),
+                    "cross_zone_activity": {},
+                    "site_type": site_type,
+                },
+                "visual_data": None,
+                "additional_sensors": [],
+                "_meta": {
+                    "ground_truth": gt,
+                    "weighted_sum": weighted_sum,
+                    "difficulty": difficulty,
+                    "source_dataset": "ucf_crime",
+                    "source_category": cat,
+                    "seed": self.seed,
+                    "index": i,
+                    "adversarial": is_adversarial,
+                    "ambiguity_flag": is_ambiguous,
+                    "description_category": desc_category,
+                    "generation_version": "v2",
                 },
             }
             scenarios.append(alert)
@@ -307,9 +477,9 @@ class VisualGenerator:
     dataset. Evaluators must download the source datasets separately.
     """
 
-    def __init__(self, seed: int = 42):
+    def __init__(self, seed: int = 42, version: str = "v1"):
         self.rng = np.random.RandomState(seed)
-        self.metadata_gen = MetadataGenerator(seed=seed)
+        self.metadata_gen = MetadataGenerator(seed=seed, version=version)
 
     def generate_ucf_crime(self, n: int = 3000) -> list[dict]:
         """Generate Visual Track scenarios from UCF Crime.
@@ -351,9 +521,9 @@ class VisualGenerator:
 class MultiSensorGenerator:
     """Generate Multi-Sensor Track scenarios with fused sensor data."""
 
-    def __init__(self, seed: int = 42):
+    def __init__(self, seed: int = 42, version: str = "v1"):
         self.rng = np.random.RandomState(seed)
-        self.visual_gen = VisualGenerator(seed=seed)
+        self.visual_gen = VisualGenerator(seed=seed, version=version)
 
     def generate(self, n: int = 1000) -> list[dict]:
         """Generate n multi-sensor scenarios.

@@ -287,6 +287,146 @@ UCF_CATEGORY_MAP = {
 }
 
 # ---------------------------------------------------------------------------
+# Shared description pools (v2) — decoupled from UCF categories
+# ---------------------------------------------------------------------------
+# AMBIGUOUS: same description can appear across THREAT, SUSPICIOUS, or BENIGN GT
+# depending on context (zone, time, device FPR, badge access). ~63% of v2 descriptions.
+DESCRIPTION_POOL_AMBIGUOUS = [
+    "Motion detected, human-shaped silhouette, zone-perimeter, 02:14",
+    "Person observed near access point, no badge event in prior 30 min",
+    "Individual moving along fence line, gait analysis inconclusive",
+    "Vehicle stopped outside facility, engine running, no appointment on file",
+    "Two persons detected in utility corridor, unscheduled access",
+    "Human presence detected at remote site, no recent badge grant",
+    "Motion near high-voltage equipment, identity unverified",
+    "Person loitering near entry point, 18 min stationary",
+    "Unscheduled vehicle approaching perimeter gate, slow speed",
+    "Individual carrying equipment toward exit, badge scan 4 min ago",
+    "Person crouching near panel array section, tool visible",
+    "Motion detected in restricted zone, personnel roster not updated",
+    "Camera analytics: unusual gait pattern detected, zone-3, 23:47",
+    "Multiple persons congregating near service gate, partial obstruction",
+    "Person detected on perimeter road, no escort logged, 01:05",
+    "Individual accessing storage area, authorization status unconfirmed",
+    "Vehicle traversing access road outside posted hours",
+    "Person detected near fuel storage area, no hot work permit active",
+    "Camera trigger: human-class object, zone-interior, low confidence 0.62",
+    "Motion detected in equipment hall, shift schedule shows no activity expected",
+    "Person near cooling system, carrying bag, movement purposeful",
+    "Thermal signature detected near battery storage, source unconfirmed",
+]
+
+# UNAMBIGUOUS THREAT: always indicate high threat signal regardless of context (~23% of pool).
+DESCRIPTION_POOL_UNAMBIGUOUS_THREAT = [
+    "Visible flames detected in panel array, fire suppression not triggered",
+    "Person cutting perimeter fence with visible tool, 03:22",
+    "Gunshot-like audio event detected, multiple sensor confirmations",
+    "Forced entry at control cabinet door, physical damage visible",
+    "Smoke rising from transformer yard, thermal spike +40F above baseline",
+    "Perimeter breach: fence displacement confirmed by vibration sensor",
+    "Explosive-like event detected: sudden pressure and light burst",
+    "Camera analytics: assault-class motion between two persons detected",
+]
+
+# UNAMBIGUOUS BENIGN: always indicate low threat signal regardless of context (~14% of pool).
+DESCRIPTION_POOL_UNAMBIGUOUS_BENIGN = [
+    "Environmental trigger: wind gust 22 mph causing vegetation motion",
+    "Camera false activation: spider web on lens, no motion in scene",
+    "Small animal (rabbit-class) crossing sensor field, no human present",
+    "Scheduled maintenance crew confirmed via badge: 3 personnel authorized",
+    "Camera self-test trigger, no scene content, internal diagnostic",
+]
+
+# ---------------------------------------------------------------------------
+# V2 Ground Truth Decision Function
+# ---------------------------------------------------------------------------
+# GT determined by weighted combination of context signals, not by category alone.
+# Signal scoring: each signal contributes to a weighted_sum in [-1.25, +1.25].
+# Negative = BENIGN evidence, Positive = THREAT evidence.
+# GT thresholds: sum > +0.30 → THREAT, sum < -0.30 → BENIGN, else → SUSPICIOUS
+#
+# SCEN-03 compliance: severity max score = 0.25 < threshold 0.30.
+# Severity alone can never cross the threshold.
+
+_GT_THRESHOLD = 0.30
+_AMBIGUITY_THRESHOLD = 0.10  # |sum| < this → "ambiguous by design"
+
+_ZONE_THREAT_SCORES = {
+    "restricted": +0.40,
+    "utility": +0.25,
+    "perimeter": +0.10,
+    "interior": 0.00,
+    "parking": -0.15,
+}
+
+_TIME_THREAT_SCORES = {
+    "night": +0.35,
+    "dawn": +0.15,
+    "dusk": +0.10,
+    "day": -0.20,
+}
+
+_SEVERITY_THREAT_SCORES = {
+    "CRITICAL": +0.25,
+    "HIGH": +0.15,
+    "MEDIUM": 0.00,
+    "LOW": -0.20,
+}
+
+
+def _device_fpr_score(fpr: float) -> float:
+    """Map device FPR to threat score. Linear: FPR=0.05 → +0.13, FPR=0.95 → -0.27."""
+    return round(0.15 - (fpr * (0.40 / 0.90)), 3)
+
+
+def assign_ground_truth_v2(
+    zone_type: str,
+    zone_sensitivity: int,
+    time_of_day: str,
+    device_fpr: float,
+    severity: str,
+    badge_access_minutes_ago: int | None,
+    rng: "np.random.RandomState",
+) -> tuple[str, float, bool]:
+    """Assign ground truth using a weighted multi-signal scoring function.
+
+    Returns:
+        tuple: (ground_truth label, weighted_sum, is_ambiguous)
+    """
+    zone_base = _ZONE_THREAT_SCORES.get(zone_type, 0.0)
+    sensitivity_factor = 0.6 + (zone_sensitivity - 1) * 0.2
+    zone_score = zone_base * sensitivity_factor
+
+    time_score = _TIME_THREAT_SCORES.get(time_of_day, 0.0)
+    fpr_score = _device_fpr_score(device_fpr)
+    severity_score = _SEVERITY_THREAT_SCORES.get(severity, 0.0)
+
+    if badge_access_minutes_ago is not None and badge_access_minutes_ago <= 10:
+        badge_score = -0.45
+    elif badge_access_minutes_ago is not None and badge_access_minutes_ago <= 30:
+        badge_score = -0.25
+    else:
+        badge_score = 0.0
+
+    weighted_sum = zone_score + time_score + fpr_score + severity_score + badge_score
+    weighted_sum = round(weighted_sum, 4)
+
+    is_ambiguous = abs(weighted_sum) < _AMBIGUITY_THRESHOLD
+
+    if weighted_sum > _GT_THRESHOLD:
+        gt = "THREAT"
+    elif weighted_sum < -_GT_THRESHOLD:
+        gt = "BENIGN"
+    else:
+        gt = "SUSPICIOUS"
+
+    return gt, weighted_sum, is_ambiguous
+
+
+# All severity levels — used for severity_noise injection.
+ALL_SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+
+# ---------------------------------------------------------------------------
 # Caltech Camera Traps → alert mapping
 # ---------------------------------------------------------------------------
 # Camera trap triggers are overwhelmingly false alarms (70% empty).

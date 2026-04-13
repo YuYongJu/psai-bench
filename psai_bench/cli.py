@@ -28,7 +28,9 @@ def main():
 @click.option("--n", type=int, default=None, help="Number of scenarios (default: spec-defined)")
 @click.option("--seed", type=int, default=42)
 @click.option("--output", type=click.Path(), default="data/generated")
-def generate(track: str, source: str, n: int | None, seed: int, output: str):
+@click.option("--version", "gen_version", type=click.Choice(["v1", "v2"]), default="v1",
+              help="Scenario generation version. v2 uses context-dependent GT (PSAI-Bench v2.0).")
+def generate(track: str, source: str, n: int | None, seed: int, output: str, gen_version: str):
     """Generate evaluation scenarios."""
     from psai_bench.generators import MetadataGenerator, MultiSensorGenerator, VisualGenerator
 
@@ -36,7 +38,7 @@ def generate(track: str, source: str, n: int | None, seed: int, output: str):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if track == "metadata":
-        gen = MetadataGenerator(seed=seed)
+        gen = MetadataGenerator(seed=seed, version=gen_version)
         scenarios = []
         if source in ("ucf", "all"):
             count = n or 3000
@@ -48,7 +50,7 @@ def generate(track: str, source: str, n: int | None, seed: int, output: str):
             click.echo(f"Generated {count} Caltech metadata scenarios")
 
     elif track == "visual":
-        gen = VisualGenerator(seed=seed)
+        gen = VisualGenerator(seed=seed, version=gen_version)
         scenarios = []
         if source in ("ucf", "all"):
             count = n or 3000
@@ -60,12 +62,13 @@ def generate(track: str, source: str, n: int | None, seed: int, output: str):
             click.echo(f"Generated {count} Caltech visual scenarios")
 
     elif track == "multi_sensor":
-        gen = MultiSensorGenerator(seed=seed)
+        gen = MultiSensorGenerator(seed=seed, version=gen_version)
         count = n or 1000
         scenarios = gen.generate(count)
         click.echo(f"Generated {count} multi-sensor scenarios")
 
-    out_file = out_dir / f"{track}_{source}_seed{seed}.json"
+    version_suffix = f"_{gen_version}" if gen_version != "v1" else ""
+    out_file = out_dir / f"{track}_{source}_seed{seed}{version_suffix}.json"
     with open(out_file, "w") as f:
         json.dump(scenarios, f, indent=2)
     click.echo(f"Saved to {out_file}")
