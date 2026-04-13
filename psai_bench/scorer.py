@@ -88,11 +88,23 @@ class ScoreReport:
         return d
 
 
-def format_dashboard(report: ScoreReport, ambiguous_report: ScoreReport | None = None) -> str:
+def format_dashboard(
+    report: ScoreReport,
+    ambiguous_report: ScoreReport | None = None,
+    track_reports: dict[str, ScoreReport] | None = None,
+) -> str:
     """Format a ScoreReport as a human-readable metrics dashboard.
 
     Uses only Python builtins. Output is grep-able by metric name.
     No external dependencies (no tabulate, no rich).
+
+    Args:
+        report: Main ScoreReport from score_run().
+        ambiguous_report: Optional separate ambiguous partition report.
+        track_reports: Optional dict mapping track name to ScoreReport. When provided,
+            a Per-Track Breakdown section is appended after the Aggregate Score section.
+            If both 'metadata' and 'visual_only'/'visual_contradictory' tracks are present,
+            a Perception-Reasoning Gap preview is also rendered.
     """
     lines = []
     lines.append("=== PSAI-Bench Metrics Dashboard ===")
@@ -110,6 +122,45 @@ def format_dashboard(report: ScoreReport, ambiguous_report: ScoreReport | None =
     lines.append("  Formula: 0.4*TDR + 0.3*FASR + 0.2*Decisiveness + 0.1*(1-ECE)")
     lines.append(f"  Score:   {report.aggregate_score:.4f}")
 
+    # Per-track breakdown (optional)
+    if track_reports:
+        lines.append("")
+        lines.append("=== Per-Track Breakdown ===")
+        for track_name, sub_report in track_reports.items():
+            # Left-pad track name to 24 chars for alignment
+            padded = track_name.ljust(24)
+            lines.append(
+                f"  {padded}"
+                f"TDR={sub_report.tdr:.4f}  "
+                f"FASR={sub_report.fasr:.4f}  "
+                f"Decisive={sub_report.decisiveness:.4f}  "
+                f"Agg={sub_report.aggregate_score:.4f}  "
+                f"N={sub_report.n_scenarios}"
+            )
+
+        # Perception-Reasoning Gap preview when metadata + visual tracks coexist
+        if "metadata" in track_reports:
+            visual_track = None
+            if "visual_only" in track_reports:
+                visual_track = "visual_only"
+            elif "visual_contradictory" in track_reports:
+                visual_track = "visual_contradictory"
+
+            if visual_track is not None:
+                gap = (
+                    track_reports["metadata"].aggregate_score
+                    - track_reports[visual_track].aggregate_score
+                )
+                sign = "+" if gap >= 0 else ""
+                lines.append("")
+                lines.append("=== Perception-Reasoning Gap (Preview) ===")
+                lines.append(
+                    f"  Gap (metadata aggregate - {visual_track} aggregate): {sign}{gap:.4f}"
+                )
+                lines.append(
+                    "  Note: compute full gap analysis with `analyze-frame-gap` command (Phase 16)"
+                )
+
     # Use ambiguous_report from the report itself if not passed separately
     amb = ambiguous_report or report.ambiguous_report
     if amb is not None and amb.n_scenarios > 0:
@@ -126,6 +177,15 @@ def format_dashboard(report: ScoreReport, ambiguous_report: ScoreReport | None =
     )
 
     return "\n".join(lines)
+
+
+def partition_by_track(scenarios: list[dict]) -> dict[str, list[dict]]:
+    """Partition scenarios by their track field. Returns dict[track_name, scenarios]."""
+    partitions: dict[str, list[dict]] = {}
+    for s in scenarios:
+        track = s.get("track", "metadata")
+        partitions.setdefault(track, []).append(s)
+    return partitions
 
 
 @dataclass
