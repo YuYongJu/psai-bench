@@ -1,250 +1,158 @@
-# Technology Stack — v3.0 Visual Track Additions
+# Technology Stack: PSAI-Bench v4.0
 
-**Project:** PSAI-Bench v3.0 (Perception-Reasoning Gap milestone)
+**Project:** psai-bench — v4.0 Operational Realism milestone
 **Researched:** 2026-04-13
-**Scope:** Stack additions for visual-only scenarios, contradictory scenarios, temporal sequences, frame extraction baseline
+**Confidence:** HIGH — all findings verified directly from source files
 
 ---
 
-## Critical Framing
+## Verdict: No New Dependencies Required
 
-PSAI-Bench generates scenarios and scores outputs. It does NOT process video in its main path. The evaluated system (user-provided) processes video. This shapes every dependency decision below:
-
-- **Visual-only scenarios, contradictory scenarios, temporal alert sequences:** Zero new dependencies. All three are generator code additions — new fields in alert dicts, new distributions data, new scoring partitions. Existing numpy handles everything.
-- **Frame extraction baseline:** The only feature that touches actual video bytes. Must be an optional dependency group, not a core requirement.
-- **Scoring updates for new tracks:** Pure numpy/scipy. No new libraries.
-
-The existing constraint from PROJECT.md — "No new dependencies unless strictly needed for scenario generation" — holds for three of four features. Frame extraction is a baseline, not generation. It gets its own install group.
+Every v4.0 feature — 5-class dispatch, cost-aware scoring, multi-site generalization, adversarial
+robustness — maps to application-logic changes in existing code. The PROJECT.md constraint
+("No new dependencies unless strictly needed for scenario generation") holds.
 
 ---
 
-## What Is Already Sufficient (Do Not Change)
+## Existing Stack and v4.0 Role
 
-| Library | Current Pin | Covers |
-|---------|-------------|--------|
-| numpy >= 1.24 | core dep | All new generators, scoring partitions, temporal sequence math |
-| click >= 8.0 | core dep | CLI extensions for new generator subcommands |
-| jsonschema >= 4.0 | core dep | Schema validation for new alert dict fields (additive only) |
-| anthropic >= 0.40 | `[api]` optional | Vision LLM image description calls in frame extraction baseline |
-| openai >= 1.0 | `[api]` optional | Vision LLM image description calls in frame extraction baseline |
-| google-genai >= 1.0 | `[api]` optional | Vision LLM image description calls in frame extraction baseline |
+### Core Runtime
 
-The `[api]` optional group already covers the vision LLM calls needed for the frame extraction baseline (extract keyframe → base64-encode → pass to vision API → get scene description → score as metadata). No additions to that group.
+| Package | Pinned In | v4.0 Role |
+|---------|-----------|-----------|
+| `numpy>=1.24` | `pyproject.toml` direct | All new scoring math: cost lookups, expected cost aggregation, 5-class confusion matrix, per-site-type accuracy arrays |
+| `jsonschema>=4.0` | `pyproject.toml` direct | Extend `OUTPUT_SCHEMA` verdict enum from 3 to 5 values; extend `_META_SCHEMA_V2` generation_version to include "v4" |
+| `click>=8.0` | `pyproject.toml` direct | New CLI commands for cost scoring, adversarial reporting |
+| `pandas>=2.0` | `pyproject.toml` direct | Already imported; useful for site-type pivot tables in generalization analysis |
+| `scikit-learn>=1.3` | `pyproject.toml` direct | Pulls in `scipy` transitively; existing pattern |
+| `tabulate>=0.9` | `pyproject.toml` direct | Dashboard formatting for cost report |
+| `matplotlib>=3.7` | `pyproject.toml` direct | Cost sensitivity curves if visualization added to CLI |
+
+### Transitive (via scikit-learn)
+
+| Package | Status | v4.0 Role |
+|---------|--------|-----------|
+| `scipy` | Transitive only — NOT in pyproject.toml | `statistics.py` already imports `from scipy import stats as scipy_stats`; used for McNemar's test and bootstrap CIs. Cost sensitivity analysis (varying cost weights) could use `scipy.optimize` if needed |
+
+**Action required:** Add `scipy>=1.10` as a direct dependency to `pyproject.toml`. It is already
+used in `psai_bench/statistics.py` but is missing from the declared dependencies. This is a latent
+packaging bug — `pip install psai-bench` could install a version of scikit-learn that does not
+bring the version of scipy statistics.py expects. Fix this in v4.0 regardless of new features.
 
 ---
 
-## New Optional Dependency: Frame Extraction Baseline
+## Feature-to-Stack Mapping
 
-### Decision: opencv-python-headless >= 4.10
+### 5-Class Dispatch Decisions
 
-**Current version:** 4.13.0.92 (released 2026-02-05, actively maintained by opencv org)
+**What changes:** `OUTPUT_SCHEMA` verdict enum, `scorer.py` metrics, `schema.py` constants.
 
-**Add to:** New `[visual]` optional dependency group in pyproject.toml
+| File | Change | Package Used |
+|------|--------|--------------|
+| `psai_bench/schema.py` | Add `DISPATCH_VERDICTS` tuple with 5 values; update `OUTPUT_SCHEMA` enum | `jsonschema` |
+| `psai_bench/scorer.py` | Replace 3-class confusion matrix with 5-class; add `dispatch_accuracy` metric; re-derive TDR/FASR from dispatch verdicts | `numpy` |
+| `psai_bench/scorer.py` | `ScoreReport` gets `dispatch_accuracy`, `dispatch_confusion_matrix` fields | stdlib `dataclasses` |
 
-```toml
-[project.optional-dependencies]
-visual = [
-    "opencv-python-headless>=4.10",
-]
+The 5 classes are: `ARMED_RESPONSE`, `PATROL`, `OPERATOR_REVIEW`, `AUTO_SUPPRESS`,
+`REQUEST_DATA`. These map onto the existing 3-class schema as follows for backward compat scoring:
+- `ARMED_RESPONSE` + `PATROL` → THREAT-equivalent for TDR
+- `AUTO_SUPPRESS` → BENIGN-equivalent for FASR
+- `OPERATOR_REVIEW` + `REQUEST_DATA` → SUSPICIOUS-equivalent for Decisiveness
+
+This mapping preserves every existing metric while adding 5-class-specific metrics on top.
+
+**No new packages needed.**
+
+### Cost-Aware Scoring
+
+**What changes:** New `score_cost()` function in `scorer.py`; new `CostModel` dataclass.
+
+The cost model is a lookup table `(dispatch_verdict, ground_truth) -> float`. Expected operational
+cost is a dot product of frequencies and costs — pure numpy arithmetic.
+
+```
+# Pseudocode — no new imports
+cost_matrix = np.array(...)           # 5 dispatch x 3 GT classes
+expected_cost = np.sum(freq * cost_matrix[verdict_idx, gt_idx])
 ```
 
-**Install for frame extraction baseline:**
-```bash
-pip install "psai-bench[visual,api]"
-```
+Default cost values (from VISION.md):
+- False `ARMED_RESPONSE` on benign: $200–500
+- Missed threat (`AUTO_SUPPRESS` on THREAT): catastrophic — weight by site type
+- `OPERATOR_REVIEW`: $5–15 operator time
+- `AUTO_SUPPRESS` on benign: $0 (optimal)
 
-### Why opencv-python-headless
+The `CostModel` should be user-configurable so operators can supply their actual per-site costs via
+a JSON config. `jsonschema` validates the config; numpy computes the score.
 
-**Rejected: decord (dmlc/decord)**
-Last PyPI release: 0.6.0, June 14, 2021. Maintenance marked inactive (Snyk package health). 198 open GitHub issues with no recent resolution. Confirmed does not publish wheels for Python 3.12+. The CI matrix already targets Python 3.10/3.11/3.12 — decord breaks this immediately.
+**No new packages needed.**
 
-**Rejected: decord2 (active fork)**
-Releases through April 2026, but single-maintainer fork of an abandoned upstream. Inappropriate for a reproducibility-focused benchmark that must be installable across Python versions without build-time failures.
+### Multi-Site Generalization Testing
 
-**Rejected: ffmpeg via subprocess**
-Requires the `ffmpeg` system binary. Cannot be declared as a pip dependency — `pip install psai-bench[visual]` would silently miss it. Breaks portability across contributor machines and CI. A hidden system dependency is worse than a heavier Python wheel.
+**What changes:** New partition logic in `scorer.py` — partition by `context.site_type` rather
+than `_meta.source_dataset`.
 
-**opencv-python-headless rationale:**
-- Ships its own ffmpeg (LGPL wheel), no system binaries needed
-- Pre-built wheels for Python 3.7–3.13 confirmed on PyPI as of 2026-02-05
-- The `-headless` variant has no X11/GUI dependencies — correct for server/CI use
-- `VideoCapture` is sufficient for uniform-interval keyframe sampling (the correct baseline design — sample every N seconds, not semantically)
-- Actively maintained under the official opencv organization
+The existing `generalization_gap` field in `ScoreReport` uses `source_dataset` (UCF-Crime,
+Caltech). For v4.0, a parallel `per_site_accuracy` dict and `site_generalization_gap` are needed.
 
-**What it does in the baseline:**
+`context.site_type` already exists in `ALERT_SCHEMA` with the right enum:
+`["solar", "substation", "commercial", "industrial", "campus"]`. The scenario generators already
+populate it via `sample_site_type()` in `distributions.py`.
 
-```python
-import cv2, base64
+**Implementation:** Extend `_score_partition()` to also track `s["context"]["site_type"]` in
+parallel arrays, compute per-site accuracy using numpy boolean masks, report max-min gap.
 
-cap = cv2.VideoCapture(video_path)
-fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-interval_frames = int(fps * keyframe_interval_sec)  # e.g., every 5 seconds
+**No new packages needed.**
 
-frames = []
-frame_idx = 0
-while cap.isOpened():
-    ret, frame = cap.read()
-    if not ret:
-        break
-    if frame_idx % interval_frames == 0:
-        _, buf = cv2.imencode(".jpg", frame)
-        frames.append(base64.b64encode(buf).decode())
-    frame_idx += 1
-cap.release()
-# frames -> vision LLM via existing [api] group -> description -> metadata-track scorer
-```
+### Adversarial Robustness Scenarios
 
----
+**What changes:** New scenario templates in `distributions.py`; new adversarial category flag
+in `_meta`.
 
-## Generator Extensions — No New Libraries
+The three target adversarial patterns from VISION.md:
+1. Loitering-as-authorized-waiting — `distributions.py` already has loitering descriptions and
+   authorized access events. New scenarios combine them with BENIGN ground truth.
+2. Authorized-as-intrusion — Mismatched badge access + restricted zone + correct GT = BENIGN.
+3. Environmental-as-human — Existing `environmental_cause_probable` description pool, high severity
+   metadata. GT = BENIGN. Tests whether models over-trust severity field.
 
-All three new scenario types are implemented as additions to `generators.py` and `distributions.py`. Existing numpy RNG and dict construction handle all logic.
+These are scenario design decisions, not library decisions. The generation infrastructure
+(`generators.py`, `distributions.py`, `np.random.RandomState`) already handles deterministic
+adversarial injection (v2.0 shipped ~20%).
 
-### Visual-Only Scenarios
+`_META_SCHEMA_V2` needs a new `adversarial_pattern` string field alongside the existing
+`adversarial: bool` flag, so scorers can partition by attack type.
 
-New generator method (`generate_visual_only`) or flag on existing `VisualGenerator`. Alert dict changes:
-
-```python
-s["track"] = "visual_only"  # new track value
-s["visual_data"]["visual_only"] = True  # new flag on existing dict
-s["visual_data"]["stripped_fields"] = ["description", "severity", "zone"]
-
-# Sentinel values to catch accidental metadata use
-s["description"] = "NO_DESCRIPTION_VISUAL_ONLY_TRACK"
-s["severity"] = "UNSET"
-s["zone"]["type"] = "UNSET"
-s["zone"]["sensitivity"] = -1
-```
-
-Ground truth uses the same `assign_ground_truth_v2` from `distributions.py`, driven by video content signals stored in `_meta`. The test system must read the video; the scoring system reads `_meta.ground_truth` as always.
-
-### Contradictory Scenarios
-
-Extension of existing adversarial injection. The contradiction is declared at generation time — no runtime video parsing.
-
-New data in `distributions.py`:
-- `CONTRADICTION_PAIRS`: list of `(metadata_description, video_scene_label, correct_verdict)` tuples. Plain Python list.
-- `VIDEO_SCENE_DESCRIPTIONS`: pool of video-content descriptions for the contradiction field. Plain Python list.
-
-New `_meta` fields:
-```python
-"_meta": {
-    ...
-    "contradiction_type": "video_overrides_metadata",
-    "declared_contradiction": {
-        "metadata_signal": "routine_activity",
-        "video_signal": "fence_cutting",
-        "correct_source": "video",
-    },
-    "generation_version": "v3",
-}
-```
-
-### Temporal Alert Sequences
-
-Groups of 3–5 alerts sharing a `sequence_id`. Each alert is a normal alert dict with additional `_meta` fields. Timestamps are generated using existing `_generate_timestamp` with constrained offsets (5–15 minute gaps between sequence members, using existing numpy RNG).
-
-New `_meta` fields:
-```python
-"sequence_id": "seq-00042",
-"sequence_position": 2,       # 0-indexed
-"sequence_length": 4,
-"escalation_pattern": "rising",  # rising | falling | spike | stable
-```
-
-`sequence_id` is the grouping key for both generation and scoring. No new data structures beyond the fields above.
+**No new packages needed.**
 
 ---
 
-## Scoring Extensions — No New Libraries
+## Alternatives Considered and Rejected
 
-Three new partitions added to `scorer.py`, all using existing numpy array operations:
-
-| New Metric | What It Measures | Implementation Note |
-|------------|-----------------|---------------------|
-| `visual_only_accuracy` | Accuracy on `track == "visual_only"` scenarios | Filter by track value, pass to existing `_score_partition` |
-| `contradiction_override_rate` | Fraction of contradictory scenarios where system chose the video-correct verdict | Read `_meta.declared_contradiction.correct_source`, compare to prediction |
-| `temporal_coherence_score` | Fraction of sequences where escalation verdicts match declared `escalation_pattern` | Group by `sequence_id`, check verdict ordering within each group |
-
-`ScoreReport` dataclass: three new float fields (backward-compatible via Python dataclass defaults). `format_dashboard` gets three new display lines. No existing fields change — all v1/v2 tests remain valid.
+| Category | Considered | Rejected Because |
+|----------|------------|-----------------|
+| Cost modeling | `pulp` or `scipy.optimize` for cost minimization | Overkill — cost scoring is expected value, not optimization. Arithmetic suffices. |
+| 5-class metrics | `sklearn.metrics.classification_report` | Already using numpy directly; adding sklearn call adds no value and obscures the documented formulas |
+| Adversarial scenario generation | `faker` for richer text generation | Scenarios use fixed description pools by design — reproducibility and leakage prevention require deterministic text, not generated text |
+| Generalization testing | Separate analysis library | Per-site partitioning is 10 lines of numpy; no library warranted |
 
 ---
 
-## Schema Changes — No New Libraries
+## Dependency Action Items
 
-All changes are additive. jsonschema handles them via `additionalProperties: false` relaxation on optional object keys (or `additionalProperties: true` in existing schema — check `schema.py`).
+1. **Add `scipy>=1.10` to direct dependencies in `pyproject.toml`.** It is already used in
+   `statistics.py` but undeclared. This is a packaging correctness fix, not a new dependency.
 
-New optional fields:
-- `visual_data.visual_only` (boolean)
-- `visual_data.stripped_fields` (array of strings)
-- `_meta.sequence_id` (string)
-- `_meta.sequence_position` (integer)
-- `_meta.sequence_length` (integer)
-- `_meta.escalation_pattern` (string, enum: rising/falling/spike/stable)
-- `_meta.contradiction_type` (string, enum: video_overrides_metadata/metadata_overrides_video)
-- `_meta.declared_contradiction` (object with metadata_signal, video_signal, correct_source)
-- `_meta.generation_version` (string — already exists in v2 scenarios)
-
-All `required` lists in schema.py remain unchanged. Backward-compatible with v1/v2 scenarios.
-
----
-
-## What NOT to Add
-
-| Library | Why Not |
-|---------|---------|
-| decord | Abandoned since 2021, no Python 3.12 wheels, 198 open issues |
-| decord2 | Single-maintainer fork; portability risk across CI Python matrix |
-| imageio / imageio-ffmpeg | Downloads ffmpeg binary at runtime — same hidden system dependency problem as subprocess |
-| Pillow | Not needed — cv2.imencode handles frame-to-JPEG-bytes for base64 encoding |
-| torch / torchvision | Massive dependency; inappropriate for a benchmark tool; not needed for uniform sampling |
-| PyAV (av) | Requires system libav/libavcodec build; complex install; overkill for uniform frame sampling |
-| scenedetect | Semantic keyframe detection is wrong for this baseline by design — uniform interval is the correct baseline |
-| pydantic | Already using jsonschema; adding a second validation layer creates inconsistency |
-| Any new LLM library | Existing `[api]` group covers anthropic + openai + google-genai for vision calls |
-| scipy (new) | Already transitively available via scikit-learn; no direct import needed |
-
----
-
-## Updated pyproject.toml (v3.0 diff)
-
-```toml
-# Add new optional group
-[project.optional-dependencies]
-visual = [
-    "opencv-python-headless>=4.10",
-]
-
-# Existing groups unchanged:
-# dev = [pytest>=7.0, pytest-cov>=4.0, ruff>=0.8]
-# api = [anthropic>=0.40, openai>=1.0, google-genai>=1.0]
-```
-
----
-
-## Confidence Assessment
-
-| Area | Confidence | Notes |
-|------|------------|-------|
-| "No new deps for generators/scoring" | HIGH | Verifiable directly from existing codebase — all logic is dict manipulation and numpy operations |
-| opencv-python-headless choice | HIGH | PyPI confirms 4.13.0.92 released 2026-02-05; actively maintained; correct for headless server use |
-| decord original abandonment | HIGH | Last PyPI release June 2021 confirmed; Snyk marks maintenance inactive |
-| decord2 instability | MEDIUM | Active on PyPI through April 2026 but single-maintainer fork; portability risk not worth taking |
-| ffmpeg subprocess rejection | HIGH | System binary requirement breaks portable pip install — confirmed problem for cross-platform CI |
-| Scoring extensions in pure numpy | HIGH | All proposed metrics are array slicing and partitioning; existing `_score_partition` pattern already handles this |
-| Schema additive compatibility | HIGH | Python dataclass field defaults provide backward compat; confirmed by existing v1→v2 migration pattern |
+2. **No other dependency changes.** All v4.0 features are implementable within the existing stack.
 
 ---
 
 ## Sources
 
-- [opencv-python-headless PyPI](https://pypi.org/project/opencv-python-headless/) — version 4.13.0.92, released 2026-02-05
-- [decord PyPI](https://pypi.org/project/decord/) — version 0.6.0, last released June 2021
-- [Snyk decord health](https://snyk.io/advisor/python/decord) — maintenance status: Inactive
-- [decord GitHub](https://github.com/dmlc/decord) — 198 open issues; no recent releases
-- [decord2 PyPI](https://pypi.org/project/decord2/) — active fork, v3.3.0 released April 2026
-- [Towards Data Science: Lightning Fast Video Reading](https://towardsdatascience.com/lightning-fast-video-reading-in-python-c1438771c4e6/) — performance comparison confirming decord speed advantage (moot given maintenance status)
-
----
-*Stack research for: PSAI-Bench v3.0 visual track additions*
-*Researched: 2026-04-13*
+- Direct inspection of `pyproject.toml` (confirmed dependencies)
+- Direct inspection of `psai_bench/scorer.py` (confirmed numpy-only math, existing generalization gap)
+- Direct inspection of `psai_bench/schema.py` (confirmed OUTPUT_SCHEMA, site_type enum, _META_SCHEMA_V2)
+- Direct inspection of `psai_bench/statistics.py` (confirmed undeclared scipy import)
+- Direct inspection of `psai_bench/distributions.py` (confirmed site_type enum, adversarial description pools)
+- `.planning/PROJECT.md` constraint: "No new dependencies unless strictly needed for scenario generation"
+- `.planning/VISION.md` v4.0 cost values and dispatch class definitions

@@ -1,211 +1,210 @@
 # Project Research Summary
 
-**Project:** PSAI-Bench v3.0 — Perception-Reasoning Gap milestone
-**Domain:** Physical security AI benchmark — visual, contradictory, and temporal scenario additions
+**Project:** psai-bench — v4.0 Operational Realism
+**Domain:** Physical security AI benchmark — operational decision-support evaluation
 **Researched:** 2026-04-13
-**Confidence:** HIGH
+**Confidence:** HIGH (stack and architecture), MEDIUM (features), LOW (cost dollar values)
 
 ## Executive Summary
 
-PSAI-Bench v3.0 adds three scenario tracks to an existing benchmark that ships 133 passing tests, strict seed reproducibility, and a BYOS (bring-your-own-system) evaluation contract. The benchmark generates structured scenario data; it does not process video. This constraint is the load-bearing design principle for every decision below. Visual-only scenarios, contradictory scenarios, and temporal sequences are all generator additions — new fields in alert dicts, new distributions data, new scoring partitions — with no video processing in the benchmark itself. The only feature that touches actual video bytes is the frame extraction baseline, which is rearchitected as an evaluation protocol (not benchmark code) based on direct inspection of baselines.py.
+PSAI-Bench v4.0 extends a working 3-class benchmark (THREAT/SUSPICIOUS/BENIGN) into an operationally realistic evaluation suite for physical security AI systems. The four additions — 5-class dispatch decisions, cost-aware scoring, multi-site generalization testing, and semantic adversarial robustness — are all implementable as additive changes within the existing Python stack (numpy, jsonschema, click, pandas, scikit-learn). No new dependencies are required beyond declaring the already-used scipy as a direct dependency in pyproject.toml. The core architectural constraint is that dispatch classes are a parallel optional output field alongside verdict, not a replacement for it. This decision is resolved and must be treated as locked before any schema code is written.
 
-The recommended approach is purely additive: extend schema.py first (enables all downstream work), then build generators for each new track in dependency order, then add scoring, CLI, and documentation. All schema additions are backward-compatible — removing fields from `required` never invalidates existing scenarios, and new `_meta` fields are optional by convention. The existing `score_run()` function is the benchmark's scoring contract and must not be modified; temporal sequence scoring ships as a new `score_sequences()` function alongside it. The only new dependency is `opencv-python-headless >= 4.10` in a new `[visual]` optional extras group — everything else (generators, scoring, schema, CLI) uses existing numpy, click, and jsonschema.
+The central technical challenge is that the existing codebase bakes 3-class assumptions into six separate locations (VERDICTS constant, OUTPUT_SCHEMA enum, _META_SCHEMA_V2 ground_truth enum, scorer.py metrics, baselines.py outputs, and validation.py balance checks). Every v4.0 change must be additive around these coupling points. The build order enforces this: schema extension first (zero breaking changes), then the isolated cost_model.py module, then baselines, then scorer extension, then new generators, then CLI wiring, then comprehensive tests. Each step is independently testable before the next begins.
 
-The primary risk is metadata leakage in visual-only scenarios. Three different approaches appear across the research files, and only one passes the existing `test_leakage.py` test. STACK.md recommends sentinel values (`"NO_DESCRIPTION_VISUAL_ONLY_TRACK"`); ARCHITECTURE.md recommends null fields (schema optional); PITFALLS.md demonstrates that both are trivially detectable by the depth-1 stump the leakage test uses. The correct approach is to populate required fields from the existing shared description pools so the leakage test on the visual-only subset does not fail. This conflict between research files must be resolved at schema design time — before any generator code is written.
-
----
+The primary risk is not technical complexity but defensibility of the cost model. The dollar values in VISION.md ($200-500 per false armed response, ~$5-15 for operator review time) are plausible assumptions, not validated industry figures. A single expected-cost number without sensitivity analysis is non-reproducible and cherry-pickable. The mitigation is already established by the existing scorer pattern: report expected operational cost at multiple cost-ratio assumptions and require the cost vector to be recorded in output metadata. Make cost profiles user-configurable via JSON so operators can supply their actual costs.
 
 ## Key Findings
 
-### Stack: Minimal Additions Required
+### Recommended Stack
 
-Three of four v3.0 features require zero new dependencies. Visual-only, contradictory, and temporal scenarios are pure generator additions using existing numpy for RNG, jsonschema for validation, and click for CLI. The frame extraction baseline is reclassified as an evaluation protocol — users run it themselves, the benchmark scores outputs — eliminating the dependency concern for the benchmark itself. If a benchmark-internal frame extraction tool is ever added, it uses `opencv-python-headless >= 4.10` in a new `[visual]` optional group.
+The entire v4.0 feature set is implementable in the current stack. Direct inspection of pyproject.toml and all source modules confirms that numpy handles all new scoring math (cost lookups, 5-class confusion matrices, site-type partitioning), jsonschema validates schema extensions, click handles new CLI commands, and the numpy RandomState isolation pattern already provides deterministic adversarial injection. One latent packaging bug must be fixed: scipy is imported in statistics.py but not declared in pyproject.toml as a direct dependency. This creates a fragile transitive dependency through scikit-learn and must be corrected in v4.0 regardless of new features.
 
-**Core technologies (unchanged):**
-- numpy >= 1.24: all generator RNG, scoring partitions, temporal sequence math
-- click >= 8.0: CLI extensions for new generator subcommands
-- jsonschema >= 4.0: schema validation for additive alert dict fields
-- anthropic / openai / google-genai: already in `[api]` optional group for vision LLM calls
+**Core technologies:**
+- `numpy>=1.24`: All new scoring math — cost dot products, per-site accuracy arrays, 5-class confusion matrix
+- `jsonschema>=4.0`: Schema validation for optional dispatch field and new _meta fields
+- `click>=8.0`: Three new CLI commands (score-dispatch, site-generalization, generate adversarial_v4) plus new flags on existing commands
+- `scipy>=1.10` (declare as direct): Already used in statistics.py for McNemar's test and bootstrap CIs — undeclared dependency that must be formalized
 
-**New optional dependency:**
-- `opencv-python-headless >= 4.10` in new `[visual]` group — frame extraction only, ships own ffmpeg, headless CI-safe, Python 3.7–3.13 wheels confirmed on PyPI
+**Alternatives rejected:**
+- `pulp`/`scipy.optimize` for cost minimization: overkill — cost scoring is expected value arithmetic, not optimization
+- `faker` for adversarial text generation: v4.0 adversarials use fixed description pools for deterministic reproducibility
+- `sklearn.metrics.classification_report`: existing numpy-direct metrics are sufficient and match documented formulas
 
-**Rejected and why:** decord (abandoned June 2021, no Python 3.12 wheels), decord2 (single-maintainer fork), ffmpeg subprocess (hidden system dependency breaks portable pip install), Pillow (cv2.imencode handles frame encoding), PyAV (requires system libav build), scenedetect (semantic selection is wrong for the baseline by design).
-
-### Features: Table Stakes and Complexity
+### Expected Features
 
 **Must have (table stakes):**
-- Visual-only scenario generation (MEDIUM complexity) — the visual track is decoration without it; requires schema extension and GT derivation from UCF Crime category, not metadata signals
-- Contradictory scenario flag in `_meta` (LOW complexity) — without it, BYOS users cannot filter or report per-type accuracy; results are uninterpretable
-- Frame extraction baseline (LOW complexity) — reclassified as evaluation protocol, not benchmark code; a new `analyze-frame-gap` CLI command computes the gap from two result files
-- Visual track scoring / TDR+FASR by track (LOW complexity) — partition existing `_score_partition` by track value; minor scorer extension
-- Sequence group identifier in schema (LOW-MEDIUM complexity) — `sequence_id` and `sequence_position` in `_meta`; backward-compatible optional fields
-- Sequence GT that evolves across alerts (MEDIUM complexity) — `TemporalSequenceGenerator` with escalating/de-escalating narrative arc
-- Temporal scoring (HIGH complexity) — `score_sequences()` as a separate function; most significant new component
+- Cost-sensitive scoring framework — accuracy-only is insufficient for asymmetric-cost domains where a missed threat costs orders of magnitude more than a false dispatch
+- Per-action breakdown in results — a system that never calls armed response scores identically to one that always calls it without class-level reporting
+- 5-class dispatch output field (optional, backward-compatible) — `dispatch` alongside `verdict` in OUTPUT_SCHEMA
+- Updated _meta schema with `optimal_dispatch` and `adversarial_type` fields
+- Adversarial robustness scenarios with distinct metric (Adversarial Accuracy Drop)
 
-**Differentiators:**
-- Contradictory scenarios (MEDIUM) — no existing physical security benchmark tests visual-perception override of textual priors; primary research contribution
-- Perception-reasoning gap metric (LOW) — derived metric at scoring time comparing metadata-track vs visual-track accuracy on matched contradictory scenarios; what makes results publishable
-- Temporal escalation patterns (HIGH) — no public physical security benchmark encodes discrete alert sequences with narrative structure
-- Visual ground truth description field (LOW-MEDIUM) — `visual_data.content_description` makes visual content machine-readable without shipping video files; enables the BYOS model for visual scenarios
+**Should have (differentiators):**
+- Dispatch-conditioned cost model with configurable cost profiles (--cost-profile JSON flag) — no existing benchmark evaluates operational dispatch decisions in cost terms
+- Multi-site generalization evaluation using leave-one-domain-out protocol — novel for physical security, methodologically grounded in domain generalization literature
+- Semantic adversarial scenarios (loitering-as-waiting, authorized-as-intrusion, environmental-as-human) — distinct from pixel-perturbation attacks; tests domain reasoning, not signal processing
+- `site-generalization` CLI command with per-site-type generalization gap reporting
 
-**Defer to v2+ (anti-features confirmed):**
-- Video file bundling — incompatible with BYOS model, Apache-2.0 licensing, and GitHub constraints
-- Real video frame extraction in the benchmark — user's system's job, not the benchmark's
-- Continuous temporal scoring (VUS, range-AUC) — inappropriate for discrete alert sequences
-- Aggregate sequence score with time decay — encodes arbitrary domain assumptions, reduces transparency
+**Defer (v2+):**
+- Video-based adversarial scenarios — out of scope per VISION.md; textual/metadata adversarials are the right domain
+- Automated cost profile inference — user supplies cost matrix; benchmark does not guess it
+- Multi-site scenario rebalancing — document distribution, do not force equal class counts
+- Social engineering pattern adversarial (multi-alert temporal sequences) — requires sequence track infrastructure not yet in scope
 
-### Architecture: Build Order and Component Map
+### Architecture Approach
 
-The architecture is additive. The existing data flow (`Generator -> list[alert] -> [user's system] -> list[output] -> score_run() -> ScoreReport`) is unchanged for all v1/v2 scenarios. Three new flows are added in parallel with the existing one.
+v4.0 follows a strictly additive integration pattern. The 3-class verdict system (THREAT/SUSPICIOUS/BENIGN) is preserved in all existing paths. A new optional `dispatch` field carries the 5-class operational decision. A new isolated module (cost_model.py) handles all dispatch cost logic with no coupling to existing scoring code. New generators live in separate classes with isolated RNG state to prevent seed regression. All new CLI commands are additive; all existing commands remain backward-compatible when new flags are absent.
 
-**Critical design decisions confirmed by code inspection:**
-1. Schema must be modified first — ALERT_SCHEMA marks `severity` and `description` as required, which conflicts with visual-only scenarios that must omit them. Option A (track-aware optional fields via validation.py) is chosen over Option B (uninformative placeholders) to prevent leakage.
-2. GT assignment diverges by track — `assign_ground_truth_v2` uses metadata signals and must NOT be called for visual-only or contradictory scenarios; those must use `UCF_CATEGORY_MAP[cat]["ground_truth"]` directly.
-3. Temporal sequences break the flat-list assumption in `score_run()` — solved by a new `score_sequences()` function that does not touch `score_run`, preserving all 133 test contracts.
-4. Frame extraction is protocol, not code — `baselines.py` structure explicitly excludes API-dependent code; frame extraction goes in `docs/EVALUATION_PROTOCOL.md` and a new `analyze-frame-gap` CLI command.
+**Major components:**
+1. `schema.py` extension — adds optional `dispatch` field to OUTPUT_SCHEMA, `optimal_dispatch` and `adversarial_type` to _META_SCHEMA_V2, `DISPATCH_ACTIONS` constant; zero breaking changes
+2. `psai_bench/cost_model.py` (new) — `DISPATCH_COSTS` lookup table, `SITE_THREAT_MULTIPLIERS`, `compute_optimal_dispatch(gt, context)`, `score_dispatch()`, `CostScoreReport` dataclass; fully isolated from existing modules until scorer imports it
+3. `scorer.py` extension — new `score_dispatch_run()` alongside `score_run()`; `format_dashboard()` gains optional `cost_report` parameter; `_score_partition`, `score_run`, and `ScoreReport` are untouched
+4. `baselines.py` extension — `VERDICT_TO_DEFAULT_DISPATCH` mapping adds `dispatch` field to all 4 baseline outputs; no signature changes
+5. `AdversarialV4Generator` (new class in generators.py) — isolated RNG, `ADV_V4_*` description pools in distributions.py (separate from existing pools to prevent RNG contamination)
+6. Multi-site generalization — `compute_site_generalization_gap()` in scorer.py, `--site-type` filter on `generate` CLI (post-generation filtering to preserve seed reproducibility)
+7. `cli.py` wiring — three new commands, two modified commands; backward-compat defaults everywhere
 
-**Major components — modified:**
-- `schema.py` — extend track enum; relax required array; add `_meta` v3 fields (all optional)
-- `distributions.py` — add `CONTRADICTORY_THREAT_DESCRIPTIONS` and `CONTRADICTORY_BENIGN_DESCRIPTIONS` pools
-- `scorer.py` — add `SequenceScoreReport` dataclass and `score_sequences()` function; add track partitioning to dashboard
-- `cli.py` — extend `--track` choices; add `score-sequences` and `analyze-frame-gap` commands
-- `validation.py` — add track-aware validation (visual_only requires `visual_data.uri`; contradictory requires `_meta.contradictory = True`; temporal requires `sequence_id`)
-
-**Major components — new:**
-- `VisualOnlyGenerator` — builds directly from `VisualTrackMapper`; does NOT wrap `MetadataGenerator`; GT from UCF Crime category
-- `ContradictoryGenerator` — uses `VisualOnlyGenerator` pattern + contradictory description pools; sets `_meta.contradictory = True`; GT follows video
-- `TemporalSequenceGenerator` — generates flat list of 3-5 linked alerts with `sequence_id`, `sequence_position`, escalating timestamps; uses `assign_ground_truth_v2` per-alert (temporal track retains metadata signals)
+**Data flows:**
+- Standard path (unchanged): `score_run()` → `ScoreReport` → `format_dashboard()`
+- Dispatch path (new, additive): `score_dispatch_run()` → `CostScoreReport` → `format_dashboard(cost_report=...)`
+- Site generalization path (new): `compute_site_generalization_gap(train_site, test_site)` → gap dict
+- Adversarial analysis path (new): `score_run()` → `partition_by_adversarial_type()` → per-type accuracy breakdown
 
 ### Critical Pitfalls
 
-1. **Metadata leakage in visual-only scenarios** — STACK.md recommends sentinel values, ARCHITECTURE.md recommends null fields; both fail `test_leakage.py` because a depth-1 stump detects the track from the description or severity field. PITFALLS.md is correct: populate required fields from the existing shared description pools drawn from the same distributions as all other tracks. Resolve this conflict at schema design time before any generator code is written.
+1. **VERDICTS is a viral constant touching 6 consumers** — changing it breaks validation.py, baselines.py, test_core.py, test_leakage.py, OUTPUT_SCHEMA, and _META_SCHEMA_V2 simultaneously. Prevention: add `DISPATCH_ACTIONS` as a separate constant; keep `VERDICTS` unchanged; `dispatch` is a new optional field, never replacing `verdict`.
 
-2. **Contradictory GT resolves from metadata, not video** — If `assign_ground_truth_v2` runs on contradictory scenarios, GT follows metadata signals and the scenario is incoherent. Contradictory scenarios must bypass the weighted-sum function and take GT directly from `UCF_CATEGORY_MAP[cat]["ground_truth"]`. Store both `metadata_derived_gt` and `video_derived_gt` in `_meta`; add a test asserting they differ for all `contradictory = True` scenarios.
+2. **Metric definitions (TDR/FASR/Decisiveness) are undefined in 5-class space** — if SUSPICIOUS disappears, TDR has no partial-detection class and decisiveness becomes trivially 1.0. Prevention: write new metric semantics on paper before touching ScoreReport. The backward-compat mapping resolves this: ARMED_RESPONSE+PATROL map to THREAT-equivalent, AUTO_SUPPRESS to BENIGN-equivalent, OPERATOR_REVIEW+REQUEST_DATA to SUSPICIOUS-equivalent.
 
-3. **Temporal sequences penalize correct early SUSPICIOUS responses** — Per-alert independent scoring penalizes a system that correctly returns SUSPICIOUS on alert 1 of a 5-alert escalation sequence. Keep per-alert scoring unchanged for existing tests; add `score_sequences()` as a separate scoring path. Document which metric applies to which scenario type in the evaluation protocol.
+3. **Cost model without sensitivity analysis is non-reproducible** — VISION.md dollar values are provisional assumptions; different cost ratios flip system rankings. Prevention: report expected cost at multiple cost-ratio assumptions; record cost vector in output metadata; expose --cost-profile flag.
 
-4. **RNG stream coupling breaks seed reproducibility** — New generators sharing an RNG instance or importing private functions from `generators.py` shift existing call counts and break determinism tests. Each generator must own its own `np.random.RandomState(seed)`. Pin the seed-42 scenario hash regression test before touching any generator file.
+4. **Seed reproducibility breaks if generator RNG sequences change** — adding new rng.choice() calls inside existing generators shifts all downstream outputs for the same seed, breaking test_seed_regression.py. Prevention: new generators get new isolated np.random.RandomState instances; all v4.0 generation gated under generation_version "v4".
 
-5. **Schema changes break 133 existing tests** — Adding new required fields to `ALERT_SCHEMA` invalidates all existing `_make_scenario()` fixtures. All new fields must go in `_meta` (not schema-validated) or be optional with defaults. Run the full test suite after every schema.py change before proceeding.
-
----
+5. **Multi-site generalization has structural site-identity leakage** — SITE_CATEGORY_BLOCKLIST means solar scenarios never contain Shoplifting/Robbery categories, so a model can infer site type from category distribution without seeing context.site_type. Prevention: run a logistic regression probe with site_type masked before publishing any generalization metric.
 
 ## Implications for Roadmap
 
-The user-specified build order is: schema → visual → contradictory → temporal → scoring → CLI → protocol. This matches the dependency graph from ARCHITECTURE.md and is confirmed correct.
+All 4 researchers converge on the same build order. The grouping below maps their 8-step sequence into phases that can be planned, tracked, and tested independently.
 
-### Phase 1: Schema v3
-**Rationale:** Every downstream generator and validator needs the new field definitions. Schema changes are purely additive (enum expansion, required relaxation, optional `_meta` fields) and carry the highest regression risk if done later. This phase also resolves the three-way design conflict on visual-only field handling — STACK.md (sentinels), ARCHITECTURE.md (nulls), and PITFALLS.md (shared pools) all recommend different approaches; the leakage test constraint settles it in favor of shared pools.
-**Delivers:** Extended `ALERT_SCHEMA` with new track values; relaxed required array for visual tracks; `_meta` v3 fields (visual_gt_source, contradictory, sequence_id, sequence_position, sequence_length, generation_version: v3); track-aware validation in `validation.py`
-**Addresses:** Table stakes — sequence group identifier; visual-only schema prerequisite
-**Avoids:** Pitfall 9 (schema breaks existing tests), Pitfall 1 (leakage design conflict resolved explicitly)
+### Phase 1: Schema and Cost Model Foundation
 
-### Phase 2: Visual-Only Scenarios
-**Rationale:** Simpler than contradictory; serves as reference implementation for the visual track pattern before harder cases. Unblocked by schema phase. Does not depend on contradictory or temporal work.
-**Delivers:** `VisualOnlyGenerator` class; UCF Crime-only visual-only scenarios; GT from `UCF_CATEGORY_MAP`; `visual_gt_source = "video_category"` in `_meta`; class balance audit against UCF Crime distribution
-**Addresses:** Table stakes — visual-only scenario generation
-**Avoids:** Pitfall 4 (RNG isolation), Pitfall 6 (class imbalance — compute and document distribution), Pitfall 11 (Caltech excluded from visual-only in v3.0)
+**Rationale:** Every other v4.0 change depends on the schema contract (what fields exist, what values they accept) and the cost model (what optimal_dispatch means for a given GT+context pair). These two components have zero coupling to each other during construction but everything downstream depends on both being stable.
 
-### Phase 3: Contradictory Scenarios
-**Rationale:** Depends on visual-only generator as reference implementation and on new description pools in `distributions.py`. The primary research contribution. Natural follow from visual-only since both use `video_category` GT.
-**Delivers:** `CONTRADICTORY_THREAT_DESCRIPTIONS` and `CONTRADICTORY_BENIGN_DESCRIPTIONS` pools in `distributions.py`; `ContradictoryGenerator` class; `_meta.contradictory = True` plus dual GT storage; test asserting `metadata_derived_gt != video_derived_gt` for all contradictory scenarios
-**Addresses:** Differentiator — contradictory scenarios (visual overrides metadata); table stakes — contradictory flag
-**Avoids:** Pitfall 2 (GT must come from video category, not metadata signals), Pitfall 7 (descriptions must be plausible-but-wrong, not obviously wrong)
+**Delivers:** Extended OUTPUT_SCHEMA (optional dispatch field), extended _META_SCHEMA_V2 (optimal_dispatch, adversarial_type), DISPATCH_ACTIONS constant, new cost_model.py with DISPATCH_COSTS table, SITE_THREAT_MULTIPLIERS, compute_optimal_dispatch(), score_dispatch(), CostScoreReport dataclass, scipy declared as direct dependency in pyproject.toml.
 
-### Phase 4: Temporal Sequences
-**Rationale:** Largest new component; independent of visual/contradictory work (temporal scenarios use metadata signals, not video GT). Isolated so it can slip without blocking visual track delivery. Highest implementation risk in the milestone.
-**Delivers:** `TemporalSequenceGenerator` class; sequences of 3-5 linked alerts with `sequence_id`, `sequence_position`, escalating/de-escalating GT narrative; varied escalation points (not fixed position); monotonically increasing timestamps
-**Addresses:** Table stakes — sequence GT that evolves across alerts; differentiator — temporal escalation patterns
-**Avoids:** Pitfall 3 (keep per-alert scoring unchanged), Pitfall 8 (vary escalation point; add position-stump leakage test), Pitfall 12 (timestamps must be strictly increasing)
+**Addresses:** 5-class dispatch output schema (table stakes), cost-aware scoring framework (table stakes), configurable cost profiles (differentiator)
 
-### Phase 5: Scoring Updates
-**Rationale:** Scoring depends on scenarios existing to test against. Adds track partitioning, sequence scoring, and perception-reasoning gap metric without touching the existing `score_run()` contract.
-**Delivers:** Track partitioning in `_score_partition` (visual_only, visual_contradictory, temporal breakdowns in dashboard); `SequenceScoreReport` dataclass; `score_sequences()` function; perception-reasoning gap metric (derived from matched contradictory scenario comparisons)
-**Addresses:** Table stakes — visual track scoring; temporal scoring; differentiator — perception-reasoning gap metric
-**Avoids:** Pitfall 3 (score_sequences is separate from score_run; all 133 tests unchanged)
+**Avoids:** VERDICTS viral constant breaking 6 consumers (Pitfall 2); backward compatibility for v1/v2/v3 outputs (Pitfall 3); metric undefined state (Pitfall 1) — documented 3→5 class mapping before code
 
-### Phase 6: CLI Extensions
-**Rationale:** CLI is the last code layer; depends on generators and scoring being stable. Purely additive — no existing commands change signature.
-**Delivers:** Extended `--track` choices in `generate` command; `score-sequences` subcommand; `analyze-frame-gap` subcommand
-**Addresses:** Table stakes — frame extraction baseline (as protocol tool, not code)
-**Avoids:** Pitfall 10 (video-dir override for path remapping in analyze-frame-gap)
+**Open decision requiring resolution in this phase:** The exact compute_optimal_dispatch decision rule — which GT × site_type × zone_sensitivity combinations map to which dispatch action. Must be written as a decision table before implementation.
 
-### Phase 7: Evaluation Protocol Document
-**Rationale:** No code dependencies. Written after visual-only scenarios exist so the protocol can reference the exact scenario format and schema fields. Documents the decisions made across all prior phases.
-**Delivers:** `docs/EVALUATION_PROTOCOL.md` — GT definition for each track; frame extraction baseline specification (uniform N-frame sampling, never using `anomaly_segments` for selection, deterministic given seed); scoring protocol for sequences; cross-track comparison guidelines; Caltech scope limitation for visual-only
-**Addresses:** Differentiator — evaluation protocol document
-**Avoids:** Pitfall 5 (keyframe strategy specified precisely, never annotation-guided)
+### Phase 2: Scoring Pipeline and Baselines
+
+**Rationale:** With schema and cost model stable, the scoring pipeline can be extended and baselines updated. These are additive changes to existing files with established patterns to follow.
+
+**Delivers:** score_dispatch_run() function in scorer.py, format_dashboard() extended with optional cost_report parameter (default None), VERDICT_TO_DEFAULT_DISPATCH mapping in baselines.py, dispatch field added to all 4 baseline outputs, updated score_multiple_runs key_metrics list.
+
+**Addresses:** Per-action breakdown in results (table stakes), cost ratio reporting at multiple assumptions (anti-cherry-pick)
+
+**Avoids:** Hardcoded 3x3 confusion matrix breakage (Pitfall 4) — cost scoring uses separate CostScoreReport, not ScoreReport; score_multiple_runs key_metrics maintenance trap (Pitfall 9)
+
+### Phase 3: Adversarial v4 Generator
+
+**Rationale:** AdversarialV4Generator is self-contained — isolated RNG, isolated description pools, isolated adversarial_type value. Does not touch existing generators or scoring path. Build before multi-site to keep phase scope minimal.
+
+**Delivers:** AdversarialV4Generator class in generators.py, ADV_V4_LOITERING_AS_WAITING, ADV_V4_AUTHORIZED_AS_INTRUSION, ADV_V4_ENVIRONMENTAL_AS_HUMAN description pools in distributions.py (isolated from existing pools), adversarial_v4 track added to ALERT_SCHEMA enum, meta.adversarial_type field populated, generate --track adversarial_v4 CLI command, Adversarial Accuracy Drop metric.
+
+**Addresses:** Semantic adversarial robustness scenarios (differentiator), adversarial_type field distinguishing signal-conflict (v2) from behavioral deception (v4) (table stakes for interpretability)
+
+**Avoids:** v4 adversarial conflating with v2 signal-conflict flag (Pitfall 7) — separate adversarial_type values; seed reproducibility breakage (Pitfall 10) — isolated RNG and separate ADV_V4_* pools
+
+**Open decision requiring resolution before this phase:** Ground truth assignment rule for behavioral adversarials. Recommended: use assign_ground_truth_v2 on actual context signals, not adversarial narrative.
+
+### Phase 4: Multi-Site Generalization
+
+**Rationale:** Highest complexity feature. Requires a structural leakage audit before implementation — SITE_CATEGORY_BLOCKLIST creates site-identity signal that may compromise the generalization test's validity. Build after all other features are stable; any discovered leakage problem is self-contained and does not block other phases.
+
+**Delivers:** compute_site_generalization_gap(scenarios, outputs, train_site, test_site) in scorer.py, --site-type option on generate CLI (post-generation filter, seed-safe), site-generalization CLI command, per-site-type accuracy reporting, Generalization Gap metric.
+
+**Addresses:** Multi-site generalization testing (differentiator), LODO evaluation protocol
+
+**Avoids:** Structural site leakage through category distributions (Pitfall 6) — leakage audit step required before metric is published; audit must run a logistic regression probe with site_type masked and verify chance-level site classification from remaining features
+
+**Evaluation protocol note:** Any prompt tuning or system calibration a user performs cannot use held-out-site scenarios. This constraint must be documented before multi-site results are accepted as benchmark submissions.
+
+### Phase 5: CLI Integration and Tests
+
+**Rationale:** All new functions, classes, and modules exist but are unwired from the CLI and lack comprehensive tests. Wire everything together and verify backward compatibility across v1/v2/v3 scenario files.
+
+**Delivers:** score --include-dispatch flag, score-dispatch command, site-generalization command, baselines updated to print dispatch distribution, full test suite covering schema validation, cost model unit tests, dispatch scoring integration, multi-site filtering, AdversarialV4Generator output validation, end-to-end flow: generate v4 → run baselines → score dispatch → assert cost_ratio.
+
+**Addresses:** CLI backward compatibility for all existing commands, estimated +50-80 new tests alongside 238 existing (all must pass)
+
+**Avoids:** evaluators.py silent conversion of unrecognized dispatch classes to SUSPICIOUS (Pitfall 11) — any v4.0 dispatch evaluator is a new file (evaluators_v4.py); validation balance check assuming 3 classes (Pitfall 12) — update balance check before any 5-class generation runs
 
 ### Phase Ordering Rationale
 
-- Schema first because it unblocks all generators and validators; doing it later risks breaking in-progress generator code
-- Visual before contradictory because contradictory builds on visual's `video_category` GT pattern; doing them together increases risk of the GT design error (Pitfall 2)
-- Temporal isolated from visual/contradictory because temporal uses metadata signals (not video GT) — the two tracks have no runtime dependency on each other, and isolation lets temporal slip without affecting the visual milestone
-- Scoring after generators because scoring tests require generated scenarios; the partition logic depends on which tracks exist
-- CLI last because it exposes what's stable; adding subcommands before scoring is done risks shipping a command that errors on the first run
-- Protocol last because it documents what was actually built, including decisions that resolve during implementation
+- Schema and cost model first because the dispatch field definition is the dependency all other work requires
+- Cost model is isolated enough to build in Phase 1 before any consumers exist and can be fully unit-tested in isolation
+- Baselines and scorer (Phase 2) are the next natural consumers; both are additive-only changes with existing patterns to follow
+- Adversarial v4 (Phase 3) is self-contained and benefits from stable schema to validate against; does not depend on scorer changes
+- Multi-site (Phase 4) comes last in the feature work because it requires an audit step that could surface architectural issues; better to have all other work stable before discovering leakage problems
+- CLI and tests (Phase 5) wires the entire system and validates integration across all phases simultaneously
 
 ### Research Flags
 
-Phases with well-documented patterns (standard implementation, no deeper research needed):
-- **Phase 1 (Schema):** Additive JSON Schema extension is a solved pattern; backward-compat rules are explicit in jsonschema docs
-- **Phase 5 (Scoring):** Partition-by-field pattern already exists in `_score_partition`; adding a sibling function is straightforward
-- **Phase 6 (CLI):** click subcommand extension is well-documented
+Phases needing `/gsd-research-phase` during planning:
+- **Phase 1 (Cost Model):** Dollar values in VISION.md are provisional assumptions (LOW confidence). The cost ratio sensitivity analysis design needs a defensible methodology before implementation. The optimal_dispatch decision rule requires a written, auditable decision table.
+- **Phase 3 (Adversarial v4):** Behavioral adversarial GT assignment rule needs explicit documentation. The boundary between "signals determine GT" and "narrative determines GT" must be resolved in writing before any scenarios are generated.
 
-Phases that may need validation during implementation:
-- **Phase 2 (Visual-Only):** Leakage test behavior on visual-only subset is untested until the generator exists; run `test_leakage.py` immediately after first generation batch
-- **Phase 4 (Temporal):** `early_detection_rate` threshold (first 2 alerts) needs validation once temporal scenarios exist; not calibrated against real data
-- **Phase 5 (Scoring):** UCF Crime class distribution audit needed before publishing cross-track comparisons; distribution-adjusted reporting may be required
-
----
+Phases with standard patterns (skip research-phase):
+- **Phase 2 (Scoring Pipeline):** Additive functions alongside existing ones; optional parameters with backward-compatible defaults. The existing codebase has multiple direct examples to follow.
+- **Phase 4 (Multi-Site):** LODO evaluation is well-documented methodology. Main risk is the leakage audit, which is a concrete engineering task, not an unknown pattern.
+- **Phase 5 (CLI + Tests):** Standard CLI wiring and test patterns already established across 238 existing tests.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All decisions traceable to PyPI release dates and pip install constraints; decord abandonment confirmed; opencv-python-headless wheels confirmed for target Python matrix |
-| Features | HIGH | Derived from direct VISION.md spec plus code inspection of what the stub VisualGenerator currently does; gaps between spec and implementation clearly identified |
-| Architecture | HIGH | All claims traceable to specific file/line; required array and GT function call chain directly observed in schema.py, generators.py, scorer.py |
-| Pitfalls | HIGH | Derived from direct code inspection including test_leakage.py stump threshold, test_core.py fixture patterns, and distributions.py pool contents |
+| Stack | HIGH | All conclusions from direct source file inspection; no external dependencies required; undeclared scipy dependency confirmed in statistics.py |
+| Features | HIGH (taxonomy), LOW (costs) | 5-class dispatch taxonomy confirmed against GSOC industry sources; cost dollar values are VISION.md assumptions with no industry validation |
+| Architecture | HIGH | Build order, component boundaries, and anti-patterns grounded in direct codebase analysis with specific line references |
+| Pitfalls | HIGH | All 12 pitfalls cite specific file locations and line numbers; VERDICTS viral constant map is complete |
 
-**Overall confidence:** HIGH
+**Overall confidence:** HIGH — with one bounded LOW-confidence area (cost dollar values) that has a clear mitigation path (configurable profiles + multi-assumption reporting).
 
-### Gaps to Address During Implementation
+### Gaps to Address
 
-- **Leakage test behavior on visual-only subset:** Predicted to pass with shared description pools; not empirically confirmed until the generator exists. Run `test_leakage.py` immediately after first generation batch and tune pool sampling if needed.
+- **Cost dollar values (LOW confidence):** VISION.md figures are plausible assumptions, not sourced from industry data. Handle by: (1) labeling defaults as "provisional benchmark assumptions" in documentation, (2) requiring --cost-profile to record the cost vector used in output metadata, (3) reporting expected cost at minimum 3 cost-ratio assumptions before declaring any system ranking. Phase 1 research flag should include finding or constructing a defensible source for default values.
 
-- **Temporal escalation threshold calibration:** `early_detection_rate` defined as "THREAT detected within first 2 alerts of a threat sequence." This threshold is reasonable but arbitrary until real temporal scenarios exist. Validate during Phase 4 and adjust `SequenceScoreReport` field definitions before Phase 5.
+- **optimal_dispatch decision rule:** The rubric for compute_optimal_dispatch(gt, context) is described in general terms but not fully specified. The exact mapping of GT × site_type × zone_sensitivity → dispatch action must be written as a decision table before implementation, or the benchmark's reference answers are undefined.
 
-- **UCF Crime class distribution for visual track:** 150 normal / 290 total = 51.7% BENIGN before mapping; actual distribution depends on `UCF_CATEGORY_MAP` thresholds. Compute in Phase 2 before Phase 5 cross-track comparisons are built. May require stratified subsampling.
+- **Site leakage audit scope:** PITFALLS.md identifies SITE_CATEGORY_BLOCKLIST as a structural leakage source. ARCHITECTURE.md does not address this. The leakage audit in Phase 4 may reveal that the multi-site generalization metric requires more foundational work than the phase scope assumes. Flag as potential phase-scope risk.
 
-- **Track-aware validation in `validation.py`:** ARCHITECTURE.md inferred the extension pattern from test_core.py without reading validation.py in full. Read validation.py at the start of Phase 1 to confirm the pattern before writing track-aware logic.
-
-- **Contradictory description subtlety calibration:** Pitfall 7 warns that algorithmic flipping produces obviously wrong descriptions. The CONTRADICTORY_*_DESCRIPTIONS pools must be hand-curated or human-reviewed before use. Budget for a review pass in Phase 3.
-
----
+- **Social engineering adversarial deferred:** FEATURES.md includes a 4th behavioral adversarial category (multi-alert temporal sequence) that ARCHITECTURE.md omits from AdversarialV4Generator. This is intentionally deferred but must be documented so it does not surface as a gap during Phase 3 planning.
 
 ## Sources
 
-### Primary (HIGH confidence — direct code inspection or official sources)
-- PSAI-Bench `psai_bench/schema.py` — ALERT_SCHEMA required array, track enum
-- PSAI-Bench `psai_bench/generators.py` — VisualGenerator, MetadataGenerator, VisualTrackMapper coupling
-- PSAI-Bench `psai_bench/scorer.py` — score_run flat-list assumption, _score_partition pattern
-- PSAI-Bench `psai_bench/distributions.py` — assign_ground_truth_v2, DESCRIPTION_POOL_AMBIGUOUS
-- PSAI-Bench `psai_bench/baselines.py` — baseline structure, API-dependency exclusion
-- PSAI-Bench `tests/test_leakage.py` — stump accuracy threshold (70%), leakage test design
-- PSAI-Bench `.planning/VISION.md` — v3.0 feature definitions and design intent
-- PSAI-Bench `.planning/PROJECT.md` — no-new-deps constraint, 133-test regression requirement
-- opencv-python-headless PyPI — version 4.13.0.92, released 2026-02-05, Python 3.7–3.13 wheels confirmed
+### Primary (HIGH confidence)
 
-### Secondary (MEDIUM confidence — well-established external patterns)
-- GroundLie360 (2025): https://arxiv.org/html/2509.08008v1 — contradictory text-video benchmark pattern from misinformation domain; same mechanism applied to security triage
-- Video-MME / AKS (CVPR 2025): https://arxiv.org/abs/2502.21271 — frame extraction vs full-video gap; keyframe baseline patterns
-- TSB-AD benchmark: https://github.com/TheDatumOrg/TSB-AD — VUS-PR metric identified as inappropriate for discrete alert sequences
+- Direct codebase inspection: `psai_bench/scorer.py`, `psai_bench/schema.py`, `psai_bench/generators.py`, `psai_bench/distributions.py`, `psai_bench/statistics.py`, `psai_bench/baselines.py`, `psai_bench/validation.py` — all findings cite specific line numbers
+- `pyproject.toml` — confirmed declared dependencies and missing scipy
+- `.planning/PROJECT.md` — "No new dependencies unless strictly needed for scenario generation" constraint
+- `.planning/VISION.md` — v4.0 dispatch class definitions and provisional cost values
+- PMC5217743: Cost-Sensitive Performance Metric for Comparing Multiple Ordinal Classifiers
+- NIST AI 100-2e2025: Adversarial Machine Learning Taxonomy
+- CVPR 2024 "Rethinking the Evaluation Protocol of Domain Generalization"
 
-### Tertiary (referenced, not independently verified)
-- Snyk decord health report — maintenance status: Inactive (confirmed by PyPI last-release date)
-- KDD 2025 survey on time-series anomaly detection — scoring patterns for alert-based evaluation
+### Secondary (MEDIUM confidence)
+
+- HiveWatch GSOC OS documentation — 5-class dispatch taxonomy confirmed against real GSOC decision flow
+- SIA "Transforming Physical Security: How AI is Changing the GSOC" (Mar 2025) — operational context for dispatch decisions
+- CyberSOCEval (CrowdStrike + Meta, Sep 2025) — confirmed no existing benchmark scores operational dispatch actions
+- Cost-Sensitive Evaluation for Binary Classifiers (arXiv 2510.22016) — cost matrix framework
+
+### Tertiary (LOW confidence)
+
+- VISION.md cost dollar values ($200-500 armed response, $5-15 operator review) — plausible assumptions; no independent industry validation found
 
 ---
 *Research completed: 2026-04-13*

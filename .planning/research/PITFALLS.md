@@ -1,455 +1,171 @@
-# Pitfalls Research: v3.0 Visual / Contradictory / Temporal / Frame-Extraction Features
+# Domain Pitfalls: v4.0 Operational Realism
 
-**Domain:** Adding visual-only scenarios, contradictory scenarios, temporal alert sequences,
-and frame extraction baseline to PSAI-Bench — an existing benchmark with 133 tests,
-strict seed reproducibility, and the BYOS (bring-your-own-system) contract.
+**Domain:** AI benchmark — adding 5-class dispatch, cost-aware scoring, multi-site generalization, adversarial robustness to an existing 3-class benchmark
 **Researched:** 2026-04-13
-**Confidence:** HIGH — derived directly from repo inspection of existing generators.py,
-schema.py, scorer.py, video_mapper.py, test_leakage.py, and the v3.0 VISION.md.
+**Source basis:** Direct codebase analysis (scorer.py, schema.py, generators.py, validation.py, tests/). Evidence lines cited throughout.
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Visual-Only Scenarios Still Have Leaky Metadata Fields
+### Pitfall 1: Metric Definitions Are Baked Into 3-Class Assumptions
 
-**What goes wrong:**
-`ALERT_SCHEMA` marks `severity`, `description`, `zone`, and `context` as required fields.
-A "visual-only" scenario cannot simply omit them — the schema validator will reject it.
-The naive fix is to populate these with dummy values ("Unknown", "LOW", etc.). But any
-non-null dummy value becomes a signal. A model that sees `severity = "UNKNOWN"` as a
-new enum value immediately knows "this is a visual-only scenario" — which leaks the
-scenario type itself, allowing models to switch reasoning strategies rather than testing
-perception. Worse, if the dummy description string is the same for every visual-only
-scenario, a depth-1 decision tree can identify the track label from the description field,
-violating the leakage test in `test_leakage.py`.
+**What goes wrong:** Every primary metric in `scorer.py` is derived from the three-way partition {THREAT, SUSPICIOUS, BENIGN}. TDR is "THREAT caught as THREAT or SUSPICIOUS" (lines 423–427). FASR is "BENIGN caught as BENIGN" (lines 429–433). Decisiveness is "not SUSPICIOUS" (lines 458–461). The aggregate score formula (lines 465–469) combines all four metrics. With 5-class dispatch, SUSPICIOUS disappears as a verdict class; the THREAT/BENIGN/SUSPICIOUS partition no longer exists, so every formula is undefined.
 
-**Why it happens:**
-Schema enforces completeness; visual-only intent conflicts with schema completeness.
+**Why it happens:** Adding dispatch classes feels like "extend the enum." It is not. It requires re-deriving what detection, suppression, and decisiveness mean in a 5-class space before a single line of code is written.
 
-**Consequences:**
-- Leakage tests fail on visual-only scenarios if dummy text is uniform
-- Models learn to detect visual-only scenarios from text fields, not from video
-- The benchmark measures "track detection skill" not "visual perception skill"
+**Consequences:** If SUSPICIOUS is removed from the output schema without updating the metric definitions first, TDR becomes undefined (what does "THREAT caught as SUSPICIOUS" mean when SUSPICIOUS is gone?), FASR remains calculable but loses its counterpart, decisiveness inverts (now 100% decisive by definition — useless), and the aggregate produces a number that means nothing.
 
-**Prevention:**
-- Add `"visual_only": true` to `_meta` (not exposed to evaluated systems) rather than
-  signaling it via public fields
-- Populate required fields with plausible-but-uninformative values drawn from the existing
-  shared description pools — same descriptions used across all tracks, not a unique sentinel
-- For severity: sample from the real distribution, not a fixed value
-- Run the leakage test (`test_leakage.py`) specifically on visual-only scenarios after
-  generation to confirm no field achieves >70% stump accuracy on this subset
+**Prevention:** Define new metric semantics on paper before touching code. Specific questions to answer: Does "operator review" count as a partial detection for TDR purposes? Does "auto-suppress" count as suppression for FASR? What is the dispatch equivalent of decisiveness? Only after written answers to these do you change `ScoreReport`.
 
-**Detection:**
-- `test_leakage.py` fails on visual-only subset
-- Description field value is identical across all visual-only scenarios
-- `track` field value is "visual" for all visual-only scenarios — if the schema exposes this,
-  models can trivially route on it
-
-**Phase:** Visual Track implementation — first design decision before writing any generator code.
+**Detection:** Tests that pass `SUSPICIOUS` in `verdict` will silently accept invalid dispatch classes once the schema is updated but before metrics are fixed. Write tests that assert metric invariants (e.g., TDR + miss_rate = 1.0) before changing the schema.
 
 ---
 
-### Pitfall 2: Contradictory Scenario Ground Truth Becomes Circular
+### Pitfall 2: `VERDICTS` Is the Viral Constant — It Touches Six Systems
 
-**What goes wrong:**
-A contradictory scenario has metadata saying X while video shows Y. The ground truth is
-determined by "video overrides metadata." But the current `assign_ground_truth_v2` function
-in `distributions.py` computes ground truth from metadata signals only (weighted_sum of
-zone sensitivity, time of day, device FPR, recent events). If you feed a contradictory
-scenario through the same GT function, you get the metadata-derived GT — not the
-video-derived GT — making the scenario incoherent. The scenario labeled "metadata says
-BENIGN, video shows THREAT" will have GT = BENIGN if the metadata GT function runs.
+**What goes wrong:** `schema.py` line 140 defines `VERDICTS = ("THREAT", "SUSPICIOUS", "BENIGN")`. This constant is imported and used in:
+- `validation.py` line 95: rejects any output whose verdict is not in VERDICTS
+- `validation.py` line 284: iterates VERDICTS to check class balance in ground truth
+- `baselines.py` line 20: picks uniformly from VERDICTS for the random baseline
+- `test_core.py` line 237: asserts every generated scenario's `_meta.ground_truth` is in VERDICTS
+- `test_leakage.py` line 127: asserts exactly 3 GT classes exist
+- `OUTPUT_SCHEMA` enum (schema.py line 123): schema validation rejects non-VERDICTS values
+- `_META_SCHEMA_V2` ground_truth enum (schema.py line 148): same lock
 
-**Why it happens:**
-The GT function was written for metadata-only scenarios. Contradictory scenarios require
-a new GT assignment path that ignores the metadata signals and resolves from the
-video content label directly.
+Changing `VERDICTS` without understanding all six downstream uses produces either silent failures (baselines generate 5-class outputs that old scorers process as 0% accuracy) or hard crashes (jsonschema validation raises on every output that uses a new dispatch class).
 
-**Consequences:**
-- A system that correctly reads the video and says THREAT gets scored wrong
-- Ground truth is not defensible ("why is GT = BENIGN when the video clearly shows fence-cutting?")
-- Published decision rubric cannot explain the label coherently
+**Why it happens:** The constant was designed as a single source of truth, which is correct. The mistake is treating "add to the tuple" as the change, when it's actually "change the type system across six consumers simultaneously."
 
-**Prevention:**
-- Contradictory scenarios must have their GT set explicitly from the video content label
-  (`UCF_CATEGORY_MAP[category]["ground_truth"]`), bypassing the weighted-sum function entirely
-- Add a new `_meta` field: `"gt_source": "video"` for contradictory scenarios and
-  `"gt_source": "context"` for normal scenarios — this makes the GT derivation auditable
-- Add a test: for every contradictory scenario where video_label == "THREAT",
-  `_meta.ground_truth` must equal "THREAT" regardless of metadata signals
+**Consequences:** The 238 existing tests will fail in ways that appear unrelated to the change (balance checks, schema validation, baseline accuracy assertions, ground truth membership checks).
 
-**Detection:**
-- Scenario has `description: "Routine activity"` + video of fence-cutting + GT = BENIGN
-- Decision rubric cannot explain the GT label without contradiction
+**Prevention:** Map every import of `VERDICTS` before changing it. The backward-compatible path is to add a separate `DISPATCH_CLASSES` constant and a `DISPATCH_OUTPUT_SCHEMA`, keeping `VERDICTS` unchanged for 3-class users. The `verdict` field stays as-is; a new `dispatch` field carries the 5-class decision. Existing outputs remain valid; new outputs carry both fields.
 
-**Phase:** Contradictory scenario generation — before any ground truth is assigned.
+**Detection:** Run `grep -rn "VERDICTS" .` before committing any schema change. If the list is longer than you expect, stop and map it fully.
 
 ---
 
-### Pitfall 3: Temporal Sequences Break the Per-Alert Scoring Contract
+### Pitfall 3: The `verdict` vs. `dispatch` Architectural Decision Is a Gating Question
 
-**What goes wrong:**
-The current scorer (`scorer.py`) operates on independent alerts: each alert gets one
-prediction, one GT, one score. Temporal sequences require a model to see alerts 1-4 before
-triaging alert 5. If the benchmark still scores each alert independently, two problems emerge:
+**What goes wrong:** The v4.0 milestone requires 5-class dispatch decisions. The current `OUTPUT_SCHEMA` requires `verdict` in `["THREAT", "SUSPICIOUS", "BENIGN"]`. There are exactly two paths:
 
-1. **Alert 1 is unscored correctly but unfair.** Alert 1 has no prior context, so any system
-   that says "SUSPICIOUS" on it (because there is no pattern yet) gets penalized even though
-   that is the correct initial response. A system that says "THREAT" on alert 1 of a 5-alert
-   escalation sequence gets a false positive — but that's the right pattern-detection call.
+**Path A — Replace:** `verdict` enum becomes the 5 dispatch classes. Every existing output file, test fixture, CLI command, and integration guide that uses `verdict` breaks immediately. The 3-class TDR/FASR metrics become meaningless. The 238 tests fail.
 
-2. **Sequence-aware scoring is not supported.** The scorer has no concept of a sequence ID,
-   no "score the final alert in context of the sequence" mode, and no "did the system
-   correctly detect the escalation pattern" metric.
+**Path B — Additive:** Keep `verdict` (3-class) required; add `dispatch` (5-class) optional. Existing users continue unaffected. New users populate both. The scorer adds a parallel scoring path for dispatch decisions. Backward compatibility is preserved by the field being optional.
 
-**Why it happens:**
-The scoring contract was designed around independent alerts. Sequence scoring requires
-group-level evaluation, not per-alert evaluation.
+**Why it matters:** This is the decision that determines the scope of every other change in v4.0. If Path A is chosen, the cost is a complete test suite overhaul and a breaking release. If Path B is chosen, the cost is two parallel scoring paths that must stay consistent.
 
-**Consequences:**
-- Systems optimized for independent triage will score incorrectly on sequences
-- No fair comparison between sequence-aware and sequence-unaware systems
-- SUSPICIOUS overuse (the known pathology from v2.0 evaluation) will be even worse on
-  early alerts in a sequence — unfairly penalized by TDR
+**Consequences of deferring:** Every implementation decision made before resolving this choice may need to be undone. If you write cost-aware scoring using `verdict` and then decide to use `dispatch`, the scoring functions need to be rewritten.
 
-**Prevention:**
-- Add `sequence_id` and `sequence_position` to `_meta` (not exposed to systems)
-- Add `"context": {"sequence_history": [...]}` to alerts 2-5 in a sequence, containing
-  summaries of prior alerts — this is what gets exposed to the system
-- Define scoring at two levels: per-alert (existing scorer, unchanged) and per-sequence
-  (new: did the system correctly escalate by alert N?)
-- Keep sequence scoring separate from existing metrics so 133 existing tests are unaffected
-- Document which metric applies to sequence scenarios in the evaluation protocol
-
-**Detection:**
-- All systems report SUSPICIOUS on alert 1 of every sequence (no baseline to compare against)
-- TDR for sequences is significantly lower than for independent alerts (not a model failure —
-  a scoring design failure)
-
-**Phase:** Temporal sequence design — before scoring logic is touched.
+**Prevention:** Commit to Path A or Path B in writing before writing any v4.0 code. The milestone context states "backward compatibility for 3-class triage users" — this is strong evidence for Path B.
 
 ---
 
-### Pitfall 4: Seed Reproducibility Breaks When New Generators Share the Same RNG Stream
+### Pitfall 4: The Confusion Matrix Is Hardcoded as 3x3
 
-**What goes wrong:**
-Every existing generator (`MetadataGenerator`, `VisualGenerator`, `MultiSensorGenerator`)
-takes a `seed` parameter and creates `np.random.RandomState(seed)`. If a new generator
-(e.g., `ContradictoryGenerator`) is added and the caller passes the same seed, both generators
-consume from independent RNG instances seeded at 42 — which is fine. But if any caller
-creates one RNG and passes it to multiple generators in sequence (or if a generator internally
-spawns sub-generators), the RNG state is shared and any change to one generator's call count
-shifts all subsequent generation. This is the classic "RNG stream coupling" problem.
+**What goes wrong:** `scorer.py` lines 502–510 hardcode `labels = ["THREAT", "SUSPICIOUS", "BENIGN"]` and build a 3x3 confusion matrix. Downstream consumers in tests (`test_core.py` lines 357–359), the dashboard (`format_dashboard`), and any external tooling that parses JSON output all assume `confusion_matrix["THREAT"]["THREAT"]` is a valid key path.
 
-**Why it happens:**
-Current generators appear isolated, but `VisualTrackMapper` imports and calls private
-functions from `generators.py` (`_assign_difficulty`, `_generate_timestamp`). If new
-generators do the same, internal call counts become load-bearing.
+**Why it matters:** With 5 dispatch classes, the confusion matrix becomes 5x5 (or N×3 if ground truth stays 3-class while predictions are 5-class). The former shape breaks all existing matrix tests. The latter shape is ambiguous and requires documenting which dimension is which.
 
-**Consequences:**
-- Existing 133 tests that assert scenario determinism may fail after adding new generators
-- `psai-bench generate --seed 42 --track metadata` produces different output if the
-  metadata generator's internal call count changes due to refactoring
-- Published benchmark scores become non-reproducible across versions
+**Prevention:** Define the confusion matrix shape explicitly before coding. If ground truth stays 3-class (THREAT/SUSPICIOUS/BENIGN) and predictions become 5-class dispatch, the matrix is 3 rows × 5 columns. Name both axes explicitly in the schema docs. Test the new shape with fixture data before wiring it to the dashboard.
 
-**Prevention:**
-- Each generator must own its RNG instance exclusively: `self.rng = np.random.RandomState(seed)`
-- Never share RNG instances between generator classes
-- Never call a generator's public methods from another generator's internal methods
-- Add a regression test: generate 100 metadata scenarios with seed=42, hash the first
-  scenario's `alert_id` and `_meta.ground_truth`, and assert it equals a pinned value
-  in the test. This test breaks immediately if the stream shifts.
-
-**Detection:**
-- Existing determinism tests fail after adding a new generator file
-- `test_core.py` `test_generator_determinism` test fails with a new import at module level
-
-**Phase:** Every phase that adds a new generator — pin the regression hash before touching anything.
+**Detection:** `test_core.py` lines 345–359 will fail immediately if the matrix shape changes without updating the test.
 
 ---
 
-### Pitfall 5: Frame Extraction Baseline Becomes an Unfair Comparison Baseline
+### Pitfall 5: Cost Numbers Without Sensitivity Analysis Are Indefensible
 
-**What goes wrong:**
-The "frame extraction baseline" is described as: extract keyframes, describe them with an
-image model, compare to full-video temporal analysis. The pitfall is defining what "fair"
-means. If the keyframe extractor picks frames that contain the anomaly (e.g., frame 1200
-of a burglary where the person is clearly visible), the keyframe baseline will perform nearly
-as well as temporal analysis — falsely concluding that "temporal understanding adds no value."
-If the keyframe extractor picks non-anomaly frames (e.g., empty scene), it underperforms
-unfairly.
+**What goes wrong:** `VISION.md` quotes "$200-500 for false dispatch" and "potentially catastrophic" for missed threats. These are placeholders, not defensible values. If the benchmark publishes a single cost model without sensitivity analysis, any user can object that their armed response costs $50 (contracted security) or $2,000 (off-duty police). Different cost assumptions flip system rankings: System A beats System B at 10:1 missed-threat weight but loses at 3:1. A published benchmark that changes its winner based on cost assumptions is not a benchmark — it is a parameter choice.
 
-UCF Crime temporal annotations already provide the anomaly start/end frames
-(`anomaly_segments` in `_meta`). If keyframe selection uses these annotations — even
-indirectly — the baseline is cheating. The entire point is to measure whether temporal
-understanding finds the anomaly that keyframe sampling would miss.
+**Why it happens:** The existing scorer already handles this correctly for safety scores (three weight ratios: 1:1, 3:1, 10:1 at `scorer.py` lines 442–444). The temptation is to add a single "operational cost" metric the same way accuracy was added: one number.
 
-**Why it happens:**
-Keyframe selection strategy is underspecified. "Extract keyframes" can mean anything from
-uniform sampling to motion-based selection to annotation-guided selection.
+**Consequences:** The benchmark becomes a tool for cherry-picking results. A vendor running their system can find the cost ratio that makes them win and cite only that number.
 
-**Consequences:**
-- If keyframes are annotation-guided: baseline artificially inflated, conclusion wrong
-- If keyframes are uniformly sampled: result depends on sampling rate, not model capability
-- Published conclusion ("temporal analysis adds X% over keyframes") is not reproducible
-  unless keyframe strategy is fully specified and deterministic
+**Prevention:** Follow the existing pattern: report expected operational cost at multiple cost ratio assumptions (e.g., false dispatch cost = 1x, 10x, 50x relative to operator review time). Never report a single operational cost score without the accompanying sensitivity table. The cost model must be documented with explicit assumptions and users must be able to supply their own cost vectors.
 
-**Prevention:**
-- Define keyframe strategy precisely: uniform temporal sampling at N frames per video,
-  where N is fixed (e.g., N=4), and selection is deterministic given a seed
-- Never expose `anomaly_segments` to the keyframe extractor — treat it as ground truth only
-- Implement the baseline as a PSAI-Bench internal tool (not user-defined), so it is
-  identical across all comparisons
-- Document the exact sampling strategy in the evaluation protocol
-
-**Detection:**
-- Keyframe baseline accuracy exceeds random baseline by more than 20pp on visual-only
-  scenarios — suggests annotation leakage into frame selection
-
-**Phase:** Frame extraction baseline design — before any implementation.
+**Detection:** If any metric in `ScoreReport` is named `operational_cost` or `expected_cost` without a corresponding `operational_cost_params` that records what cost vector was used, the metric is non-reproducible.
 
 ---
 
-### Pitfall 6: UCF Crime Video Label Distribution Creates Class Imbalance in Visual Track
+### Pitfall 6: Multi-Site Generalization Testing Has Structural Leakage
 
-**What goes wrong:**
-UCF Crime test set has 140 anomaly videos across 13 categories + 150 normal videos (290 total).
-Mapping these to THREAT/SUSPICIOUS/BENIGN via `UCF_CATEGORY_MAP` produces a specific
-distribution that is not balanced. Some categories map to SUSPICIOUS
-(e.g., Arrest, Shoplifting) and some to THREAT (Arson, Shooting, Explosion). Normal maps to
-BENIGN. The resulting class distribution in visual-only scenarios may differ substantially
-from the metadata-track distribution, making cross-track score comparisons misleading
-(a system scoring better on visual-only may just be benefiting from a more favorable class
-distribution, not better visual perception).
+**What goes wrong:** The generator already couples `site_type` to correlated features: zone names (ZONE_NAMES dict by zone type, `distributions.py`), device quality distributions (which are site-independent but the SITE_CATEGORY_BLOCKLIST in `generators.py` line 51 filters categories by site), and scenario descriptions (the shared pool is not stratified by site type, so frequency distributions of descriptions differ across sites). A "train on solar / test on commercial" split designed to measure generalization will leak site identity through these correlated features.
 
-**Why it happens:**
-UCF Crime was not designed with a balanced GT distribution for PSAI-Bench's three-class schema.
+**Concrete example:** Solar scenarios never contain "Shoplifting" or "Robbery" categories (SITE_CATEGORY_BLOCKLIST line 51). A model fine-tuned on solar scenarios learns that Shoplifting → BENIGN is an impossible label. When tested on commercial scenarios where Shoplifting → THREAT, the model's prior is wrong. But the gap measured is not "does the model generalize?" — it is "did we accidentally teach the model site identity through category filtering?"
 
-**Consequences:**
-- TDR and FASR metrics are not comparable between visual and metadata tracks if class distributions differ
-- Published results need a distribution disclaimer to be scientifically valid
-- The leakage test `test_class_balance` may fail on visual-only scenarios (65% threshold
-  may be violated if BENIGN dominates due to 150 normal videos)
+**Why it happens:** The SITE_CATEGORY_BLOCKLIST was correctly added to prevent contextual nonsense (no road accidents at indoor facilities). It was not designed with generalization testing in mind.
 
-**Prevention:**
-- Compute and document the class distribution of visual-only scenarios before publishing
-- If distribution is highly imbalanced, apply stratified subsampling to match the metadata
-  track distribution — or report cross-track comparisons as distribution-adjusted
-- Run `test_class_balance` specifically on visual-only scenarios after generation
+**Prevention:** When building multi-site splits, audit which generator features are correlated with site type. At minimum: verify that zone name vocabulary does not uniquely identify sites, verify that category distributions in the test split are not a strict subset of train split categories, and document which features a model could use as site-identity proxies. If a model can determine site type from the feature vector without using `context.site_type`, the generalization test is compromised.
 
-**Detection:**
-- BENIGN > 60% of visual-only scenarios (150 normal / 290 total = 51.7% BENIGN before mapping)
-- Cross-track TDR comparison shows large difference unexplained by model capability
-
-**Phase:** Visual track generation — after mapping is defined, before scoring is implemented.
+**Detection:** Train a simple logistic regression on generated scenarios with `site_type` removed from input. If it can classify site type above chance from the remaining features, leakage exists.
 
 ---
 
 ## Moderate Pitfalls
 
-### Pitfall 7: Contradictory Scenarios Require Human-Auditable Pairs, Not Algorithmic Flip
+### Pitfall 7: v4.0 "Adversarial" Conflicts with v2.0 `adversarial` Flag
 
-**What goes wrong:**
-The easiest implementation of "contradictory scenario" is: take an existing metadata scenario,
-flip the description to say the opposite, keep the video label. But algorithmic flipping of
-descriptions produces implausible pairs. "Person detected near perimeter" flipped to "No activity
-detected" while the video shows a burglary is too obvious — models detect the contradiction
-immediately from the text alone and route to the video. The scenario tests "can you detect a
-contradiction" not "can you perceive what the video shows."
+**What goes wrong:** `_meta.adversarial` (schema.py line 156) currently marks scenarios where one context signal was deliberately flipped to create conflicting signals (e.g., HIGH severity + BENIGN ground truth). The injection logic is in `generators.py` `_inject_adversarial_signals` (line 157), which flips severity, zone type, or time-of-day. This is signal-conflict adversarial.
 
-**Prevention:**
-- Use the existing `DESCRIPTION_POOL_AMBIGUOUS` pool for the text side of contradictory scenarios
-  so the text does not obviously contradict the video
-- The contradiction should be subtle: metadata says "Routine vehicle movement" while video shows
-  a person on foot in a restricted zone — not "No activity" while the video shows an explosion
-- Design the contradiction so a system relying only on metadata would plausibly say BENIGN,
-  and a system using video correctly says THREAT
-- Document a typology of contradiction pairs in the evaluation protocol (e.g., 3 contradiction
-  archetypes) so researchers know what they are testing
+The v4.0 adversarial scenarios described in VISION.md are behavioral adversarial: "loitering that looks like authorized waiting," "authorized access that looks like intrusion," "environmental events that look like human activity." These are different — they involve plausible real-world deception scenarios, not mechanically inverted signal values.
 
-**Phase:** Contradictory scenario design — specification phase before coding.
+If both are stored under `_meta.adversarial = True`, the metrics conflate two distinct model failure modes. A model failing on signal-conflict adversarial is failing on reasoning. A model failing on behavioral adversarial is failing on pattern recognition. These require different interventions.
+
+**Prevention:** Add a new `_meta.adversarial_type` field with values like `"signal_conflict"` (existing) and `"behavioral_deception"` (new). Report adversarial metrics split by type.
 
 ---
 
-### Pitfall 8: Temporal Sequence Position Leaks Information
+### Pitfall 8: Decisiveness Becomes Meaningless in 5-Class Output
 
-**What goes wrong:**
-If temporal sequences always follow a fixed escalation pattern (alert 1 = BENIGN, alert 5 =
-THREAT), a model that learns the position-to-label mapping from training data will correctly
-predict alert 5 = THREAT without reading the content. Position itself becomes a leakage field.
+**What goes wrong:** Decisiveness is currently defined as "fraction of THREAT|BENIGN predictions (not SUSPICIOUS)." It measures whether the model avoids hedging. In a 5-class dispatch schema, if SUSPICIOUS is removed, every prediction is by definition "decisive" — the metric is 1.0 for all systems and provides no discriminative signal.
 
-**Prevention:**
-- Vary the escalation point across sequences: some sequences escalate at position 3, some at 4,
-  some at 5
-- Include decoy sequences that plateau at SUSPICIOUS without escalating to THREAT
-- Add `sequence_position` to `_meta` but not to the exposed alert fields
-- Run a position-stump test: a depth-1 tree predicting GT from sequence position should not
-  exceed 70% accuracy (same threshold as the existing leakage test)
-
-**Phase:** Temporal sequence generation — before building the sequence generator.
+**Prevention:** Redefine decisiveness for 5-class: perhaps "fraction of predictions that are auto-suppress or armed response" (the two most definitive actions), or "fraction of predictions that are not operator-review" (the hedge equivalent). Document the new definition explicitly. Do not preserve the field name `decisiveness` if the formula changes; rename it to avoid silent semantic drift.
 
 ---
 
-### Pitfall 9: Adding New Schema Fields Breaks Existing Schema Validation Tests
+### Pitfall 9: The `score_multiple_runs` Key Metrics List Is a Maintenance Trap
 
-**What goes wrong:**
-`ALERT_SCHEMA` uses JSON Schema. Adding a new required field (e.g., `sequence_id` or
-`visual_only_flag`) to the schema breaks all existing test fixtures that use `_make_scenario()`
-in `test_core.py` — they omit the new required field and will fail `validate_alert()`.
+**What goes wrong:** `scorer.py` lines 573–577 hardcode `key_metrics = ["accuracy", "tdr", "fasr", "safety_score_3_1", "ece", "aggregate_score", "suspicious_fraction", "decisiveness"]`. When new cost-aware metrics are added to `ScoreReport`, this list must be manually updated or the new metrics will not appear in multi-run statistical summaries.
 
-**Prevention:**
-- New fields for v3.0 features should go in `_meta` (not schema-validated) wherever possible
-- If a new schema field is truly needed, add it as `"required": false` with a default, not as
-  a new required field
-- After any schema change, run the full 133-test suite before proceeding
-
-**Phase:** Any phase that modifies `schema.py`.
+**Prevention:** Either derive the key metrics list from `ScoreReport` field names with an annotation/tag, or add a test that asserts every `ScoreReport` field of type `float` appears in `key_metrics`.
 
 ---
 
-### Pitfall 10: Video URIs Are User-Local Paths — Scoring Must Be Path-Agnostic
+### Pitfall 10: Seed Reproducibility Breaks If Generator Logic Changes
 
-**What goes wrong:**
-`visual_data.uri` currently stores either a local path (e.g., `/Users/.../ucf_crime/Burglary/...`)
-or a HuggingFace path (`hf://...`). The scorer never reads these paths — it scores outputs,
-not videos. But if any benchmark tool (e.g., a new frame extraction baseline runner) tries to
-open `visual_data.uri` on a system where videos are stored at a different path, it fails with
-`FileNotFoundError`. Users who run `psai-bench generate` on one machine and `psai-bench score`
-on another will get path errors.
+**What goes wrong:** `PROJECT.md` requires "same seed + same params = same scenarios." Any change to generator logic — including new site types, new adversarial scenario types, new category blocklist entries — changes the output for existing seeds. The `test_seed_regression.py` test exists explicitly to catch this.
 
-**Prevention:**
-- Keep video paths relative or symbolic (dataset-relative, not absolute)
-- The frame extraction baseline must accept a `--video-dir` override that remaps URIs at runtime
-- Document in the evaluation protocol that visual track scenarios require local video files and
-  how to configure the path mapping
-
-**Phase:** Frame extraction baseline implementation.
-
----
-
-### Pitfall 11: Caltech Camera Traps Cannot Support Visual-Only Scenarios Without New Annotations
-
-**What goes wrong:**
-Caltech Camera Traps provides species/empty annotations, not temporal anomaly annotations.
-A "visual-only" scenario from Caltech would show a camera trap image (or short clip) of a
-coyote and ask the system to triage it. But without knowing the camera's deployment context
-(solar farm vs. wildlife preserve), the GT for "coyote in frame" is undefined. UCF Crime has
-clear anomaly/normal labels directly usable for visual-only GT. Caltech does not.
-
-**Prevention:**
-- Visual-only scenarios should come exclusively from UCF Crime in v3.0
-- Caltech remains metadata-only track (as in v2.0)
-- Document this scope decision explicitly in the evaluation protocol to prevent future
-  contributors from adding Caltech visual-only scenarios without additional annotation work
-
-**Phase:** Visual track scoping — milestone planning.
+**Prevention:** v4.0 scenario generation changes (new adversarial behavioral types, new dispatch-relevant metadata) must be gated behind a new `generation_version` value (currently `"v1"`, `"v2"`, `"v3"` in schema.py line 154). Existing scenarios at `generation_version: "v3"` must be unchanged. New v4.0 features generate at `generation_version: "v4"` with a new seed space. Do not mix generation versions in the same scenario set without explicit version-stratified analysis.
 
 ---
 
 ## Minor Pitfalls
 
-### Pitfall 12: Temporal Sequence Timestamps Must Be Internally Consistent
+### Pitfall 11: Evaluators Reference 3-Class in Prompt Templates
 
-**What goes wrong:**
-Alerts in a sequence are generated independently. If alert 1 has `timestamp = 2026-03-15T14:30:00`
-and alert 3 has `timestamp = 2026-03-15T13:45:00` (earlier than alert 1), the sequence is
-temporally incoherent. A model that reads timestamps will see alerts "going back in time" and
-either error or produce garbage reasoning.
+**What goes wrong:** `evaluators.py` line 27 contains the prompt: "Classify the alert as one of: THREAT, SUSPICIOUS, or BENIGN." Line 108 normalizes invalid verdicts to `"SUSPICIOUS"` as default. If v4.0 adds dispatch classes, the evaluator prompts must be updated, and the fallback normalization logic must change or it will silently convert unrecognized dispatch classes into SUSPICIOUS.
 
-**Prevention:**
-- Generate sequence timestamps by incrementing from a base timestamp: alert N has
-  `base + (N-1) * interval_minutes`
-- `interval_minutes` should vary (e.g., 5-20 minutes) to reflect realistic alert spacing
-- Add a test: for every sequence, all alerts must have strictly increasing timestamps
-
-**Phase:** Temporal sequence generator implementation.
+**Prevention:** Treat `evaluators.py` as a reference implementation, not production code. Any v4.0 dispatch evaluator should be a new file (`evaluators_v4.py`) rather than modifying the existing one, to preserve backward-compatible examples.
 
 ---
 
-### Pitfall 13: "Contradictory" Scenario Requires Two Distinct Ground Truth Labels During Construction
+### Pitfall 12: Validation Balance Check Assumes 3 Classes at Minimum 5% Each
 
-**What goes wrong:**
-During development, a contradictory scenario must track both the metadata-derived GT
-(what the metadata signals say) and the video-derived GT (what the video shows). If only one
-is stored, the evaluation protocol cannot verify the contradiction is meaningful (i.e., the
-two GT signals genuinely disagree). A scenario that happens to have `metadata_gt = SUSPICIOUS`
-and `video_gt = THREAT` is a contradiction. A scenario where both agree is not.
+**What goes wrong:** `validation.py` lines 282–286 iterate over `VERDICTS` and warn if any class appears at less than 5% of scenarios. With 5 dispatch classes as ground truth, the balance check logic is wrong — there are now 5 classes to check, and the thresholds for acceptability may differ per class (armed response should be rare; auto-suppress may dominate).
 
-**Prevention:**
-- Store both `metadata_derived_gt` and `video_derived_gt` in `_meta` for contradictory scenarios
-- Final `ground_truth` in `_meta` is always `video_derived_gt` for contradictory scenarios
-- Add a test: all scenarios with `_meta.contradictory = True` must have
-  `metadata_derived_gt != video_derived_gt`
-
-**Phase:** Contradictory scenario generation.
+**Prevention:** Update the balance check before any 5-class scenario generation runs. Otherwise validation will silently pass on badly imbalanced dispatch label distributions.
 
 ---
 
-### Pitfall 14: Frame Extraction Baseline Depends on External CV Libraries Not Currently in Deps
+## Phase-Specific Warnings
 
-**What goes wrong:**
-Keyframe extraction requires reading video files: either OpenCV (`cv2`) or PyAV or similar.
-These are not in `pyproject.toml` and carry significant binary dependencies (OpenCV is ~50MB
-installed). Adding them as hard dependencies bloats the install for all users who only need
-the metadata track.
-
-**Prevention:**
-- Add video dependencies as an optional extras group: `pip install psai-bench[visual]`
-- Baseline runner should import these lazily with a helpful error if missing:
-  `"Frame extraction requires: pip install psai-bench[visual]"`
-- Do not add `opencv-python` to core deps — it conflicts with `opencv-python-headless` in
-  server environments
-
-**Phase:** Frame extraction baseline implementation.
-
----
-
-## Phase-Specific Warning Summary
-
-| Phase Topic | Critical Pitfall | Mitigation |
-|-------------|-----------------|------------|
-| Visual-only generator | Leaky dummy metadata fields | Use shared description pools; run leakage test on visual subset |
-| Visual-only generator | Caltech has no anomaly annotations | UCF Crime only for visual-only |
-| Contradictory scenarios | GT resolves from metadata, not video | New GT path: `video_derived_gt` bypasses weighted-sum function |
-| Contradictory scenarios | Descriptions too obviously wrong | Use ambiguous descriptions that do not directly contradict video |
-| Temporal sequences | Per-alert scorer penalizes correct early SUSPICIOUS | Add sequence-level scoring; keep per-alert scorer for existing tests |
-| Temporal sequences | Position leaks GT | Vary escalation point; add position-stump leakage test |
-| Temporal sequences | Incoherent timestamps | Generate incrementally from base timestamp |
-| Seed reproducibility | New generators share RNG streams | Each generator owns its own `RandomState(seed)` |
-| Seed reproducibility | New code shifts existing RNG call count | Pin regression hash test before any generator change |
-| Frame extraction baseline | Annotation leakage into keyframe selection | Uniform temporal sampling, never use `anomaly_segments` for selection |
-| Frame extraction baseline | Video CV deps bloat install | Optional `psai-bench[visual]` extras group |
-| Schema changes | New required fields break 133 tests | Prefer `_meta` additions; never add required public schema fields |
-| Video URIs | Absolute paths break on different machines | Relative paths + `--video-dir` override |
-| Class balance | UCF Crime distribution != metadata distribution | Compute visual-only class dist; stratify if needed |
-
----
-
-## Integration Regression Risk
-
-The 133 existing tests must not regress. The following changes carry the highest regression risk:
-
-| Change | Tests at Risk | Guard |
-|--------|--------------|-------|
-| Modifying `schema.py` | All `validate_alert()` calls in `test_core.py` | Run full test suite before merging |
-| Modifying `distributions.py` | `test_leakage.py`, `test_core.py::test_generator_determinism` | Pin hash before and verify after |
-| Modifying `generators.py` internal functions | `VisualTrackMapper` (imports private functions) | Any change to `_assign_difficulty` or `_generate_timestamp` is high risk |
-| Adding imports to `generators.py` | Module-level RNG calls shift stream | Verify seed-42 scenario ID hash unchanged |
-| Adding scoring metrics to `scorer.py` | `test_core.py::test_scorer_*` | New metrics must not change existing metric values |
-
----
-
-## Sources
-
-- Direct inspection: `/psai_bench/generators.py`, `schema.py`, `scorer.py`, `video_mapper.py`,
-  `baselines.py`, `distributions.py`, `tests/test_leakage.py`, `tests/test_core.py`
-- `.planning/PROJECT.md` — constraint: 133 tests must not regress; seed reproducibility hard constraint
-- `.planning/VISION.md` — v3.0 feature definitions and contradictory scenario design intent
-- NumPy RandomState documentation — `np.random.RandomState` per-instance isolation
-- UCF Crime dataset structure: 140 anomaly test videos (13 categories) + 150 normal, with temporal annotations
-
----
-*Pitfalls research for: PSAI-Bench v3.0 — visual/contradictory/temporal/frame-extraction milestone*
-*Researched: 2026-04-13*
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|---------------|------------|
+| 5-class output schema | `VERDICTS` viral change breaks 6 consumers simultaneously | Map all imports before any change; additive `dispatch` field preferred over replacing `verdict` |
+| Metric re-derivation | TDR/FASR/Decisiveness are undefined in 5-class space | Write new definitions on paper before touching ScoreReport |
+| Confusion matrix extension | Hardcoded 3x3 at scorer.py:502 breaks tests and dashboard | Define matrix shape (3×5 vs 5×5) before implementation |
+| Cost model | Single cost number is non-reproducible and cherry-pickable | Report at multiple cost ratio assumptions; record params in output |
+| Multi-site split construction | Site-type identity leaks through category distributions and zone vocabulary | Audit feature-site correlations; verify with site-type classifier probe |
+| Adversarial scenario generation | v4.0 behavioral adversarial conflates with v2.0 signal-conflict adversarial flag | Add `adversarial_type` field; report metrics split by type |
+| Seed regression | Generator logic changes break `test_seed_regression.py` | Gate all v4.0 generation under `generation_version: "v4"` |
+| Backward compatibility | 3-class users break if `verdict` enum changes | Require `verdict` unchanged; `dispatch` is new optional field |

@@ -1,139 +1,196 @@
-# Feature Landscape: PSAI-Bench v3.0
+# Feature Landscape
 
-**Domain:** Visual and temporal track additions to an existing security alert triage benchmark
-**Milestone:** v3.0 Perception-Reasoning Gap
+**Domain:** Physical security AI benchmark — operational decision-support evaluation
 **Researched:** 2026-04-13
-**Confidence:** HIGH
-
-## Framing Note
-
-v2.0 shipped a complete Metadata Track with context-dependent GT, context-dependent scoring, 133 tests, and BYOS workflow. The v3.0 features are additions to that foundation. Every feature here must respect the constraint that video processing is explicitly out of scope — the benchmark generates structured scenario data; the evaluated system processes it. No video decoding libraries, no frame extraction pipelines, no video file bundling. The benchmark's job is to define what the visual content shows (in structured form) and let the system decide how to use that.
+**Milestone scope:** v4.0 (5-class dispatch, cost-aware scoring, multi-site generalization, adversarial robustness)
 
 ---
 
-## What Already Exists
+## Framing: The Critical Design Decision
 
-| Component | State |
-|-----------|-------|
-| `VisualGenerator` | Stub. Clones MetadataGenerator output, replaces `track`, adds `visual_data.uri`. GT is still determined by metadata signals — video URI is decoration. |
-| `ALERT_SCHEMA.visual_data` | Object with `type`, `uri`, `duration_sec`, `resolution`. No content description field. |
-| `_META_SCHEMA_V2` | No visual- or sequence-specific fields. |
-| `baselines.py` | Four baselines, all metadata-only. No frame extraction baseline. |
-| `scorer.py` | Per-alert independent scoring. No sequence-aware scoring. |
+Before feature classification, one unresolved design question dominates v4.0:
+
+**Are dispatch classes a replacement for the triage classification, or a second layer on top of it?**
+
+VISION.md describes 5 dispatch actions (armed response, patrol, operator review, auto-suppress, request data). The current OUTPUT_SCHEMA has `verdict: THREAT | SUSPICIOUS | BENIGN`. These are conceptually different: one is a classification of the event, the other is an operational response decision.
+
+**Option A — Two-layer:** Keep verdict (THREAT/SUSPICIOUS/BENIGN), add required `dispatch_action` field. Verdict explains what happened; dispatch_action says what to do. Backward compatible: old systems produce verdict only.
+
+**Option B — Replace:** verdict becomes the 5-class dispatch label. Simpler schema, but breaks backward compatibility and loses the perception-vs-response distinction.
+
+The research supports Option A. Real GSOCs make two decisions: (1) what is this? (2) what do I do about it? These aren't the same question. A THREAT in a parking lot warrants patrol; a THREAT in a restricted zone warrants armed response. The dispatch decision depends on threat classification AND site context. Option A preserves this distinction and maintains backward compatibility.
+
+**This must be resolved before building v4.0 schema, scoring, or CLI.**
 
 ---
 
 ## Table Stakes
 
-Features that must exist for the benchmark to deliver on its stated v3.0 claims. Missing any of these makes the benchmark untestable for the features it advertises.
+Features that a benchmark claiming "operational realism" cannot omit.
 
-| Feature | Why Required | Complexity | Dependencies |
-|---------|--------------|------------|--------------|
-| Visual-only scenario generation | VISION.md core claim: "video + minimal metadata, system derives everything from video." Without this the visual track remains decoration. | MEDIUM | Schema extension needed: `visual_ground_truth_description` in `visual_data`; strip severity, description, zone from alert body for visual-only scenarios. GT must derive from visual content description, not context signals. |
-| Contradictory scenario flag in `_meta` | Without a flag identifying which scenarios are contradictory, BYOS users cannot filter them or report contradictory-specific accuracy. Results are uninterpretable. | LOW | New `_meta` field `contradictory: bool`; existing `adversarial` field is a model for this. |
-| Frame extraction baseline | Visual track needs at least one non-random baseline, otherwise there is no floor to beat. The frame extraction baseline simulates a system that converts keyframes to text descriptions. It makes the research question "does full-video temporal analysis beat static keyframe description?" answerable. | LOW | New function in `baselines.py`. Can be implemented with synthetic frame descriptions drawn from `visual_ground_truth_description`. No new dependencies. |
-| Visual track scoring (TDR/FASR by track) | Without per-track metric breakdowns, the benchmark cannot answer "does visual input improve triage?" — which is the entire research question. | LOW | The scorer already aggregates globally. Need to partition results by `track` field. Minor extension of existing scorer. |
-| Sequence group identifier in schema | Temporal sequences require a `sequence_id` to link related alerts. Without it, evaluators cannot load sequences as ordered groups. | LOW-MEDIUM | Schema extension. Backward-compatible if optional field. |
-| Sequence GT that evolves across alerts | If GT for alert N+1 is independent of alert N, temporal sequences add no value. The escalation pattern must be encoded so the full sequence produces a narrative arc: e.g., BENIGN → SUSPICIOUS → THREAT. | MEDIUM | New generator for `TemporalSequenceGenerator`. Produces groups of 3-5 alerts with monotonically escalating or de-escalating GT and explicit causal links in context. |
-| Temporal scoring | The existing scorer evaluates each alert independently. Temporal sequences require sequence-level evaluation: did the system escalate at the right alert? Did it correctly identify when the threat resolved? | HIGH | Most significant new component. Separate scoring path from per-alert scoring. May require new metrics: escalation latency (how many alerts until system escalated), false escalation rate. |
-
----
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Cost-sensitive scoring framework | Field standard — accuracy-only is insufficient for asymmetric-cost domains (missed threat >> false dispatch) | Medium | Well-established theory (cost matrix, expected total cost — PMC5217743). Dollar amounts in VISION.md are assumptions, not industry data — mark as provisional. |
+| Adversarial robustness test scenarios | Any "AI security" claim requires robustness characterization; NIST AI 100-2e2025 covers taxonomy | Low (scenarios already partially exist) | v2.0 has ~20% adversarial injection; v4.0 expands to semantic-level adversarials (distinct from pixel-perturbation literature) |
+| Per-action breakdown in results | Without separating dispatch classes, the score is uninterpretable for operators | Low | Same philosophy as v2.0's separate metric dashboard |
+| Updated output schema | Any new dispatch output field needs schema validation and docs | Low | Must preserve backward compat (v1.0 verdict-only still valid) |
 
 ## Differentiators
 
-Features that distinguish the v3.0 benchmark from all prior work and justify the "Perception-Reasoning Gap" framing.
+Features that would distinguish PSAI-Bench from any existing benchmark.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Contradictory scenarios (visual overrides metadata) | No existing physical security benchmark tests whether a model's visual perception can override textual priors. GroundLie360 (2025) handles contradictory text-video in misinformation detection — the same mechanism applied to security triage is novel. This is the primary research contribution. | MEDIUM | Two sub-types: (1) metadata-says-THREAT, video-shows-BENIGN (overreach); (2) metadata-says-BENIGN, video-shows-THREAT (underreach). GT follows video. Must track which modality the system trusted — add `modality_followed` to output schema or track by comparing verdict to metadata-implied vs. video-implied verdict. |
-| Perception-reasoning gap metric | The measurable outcome of the contradictory scenario design: how often does adding visual data change the verdict, and is that change correct? This is what makes a paper publishable — a concrete gap metric. | LOW | Derived metric computed at scoring time, not a generator feature. Compare metadata-track accuracy vs. visual-track accuracy on matched contradictory scenarios. |
-| Temporal escalation patterns | Real-world security triage involves sequential reasoning. No public physical security benchmark encodes escalation sequences. TSB-AD and similar time-series anomaly benchmarks handle continuous signals, not discrete alert sequences with narrative structure. | HIGH | Each 3-5 alert sequence should have a "trigger alert" — the alert at which a correctly-functioning system should escalate. GT for the sequence includes: trigger index, expected escalation verdict, expected final verdict. |
-| Visual ground truth description field | Making the visual content machine-readable (as a structured description) without shipping video files or requiring processing infrastructure. This is the design choice that enables the BYOS model to work for visual scenarios. | LOW-MEDIUM | New field in `visual_data`: `content_description` (string, LLM-readable description of what the video shows) and `ground_truth_visual_event` (structured enum of event type). Populated during generation from UCF Crime category. |
-
----
+| 5-class dispatch output evaluation | No existing benchmark evaluates operational dispatch decisions — CyberSOCEval (MCQ accuracy), ExCyTIn-Bench (multistep agent tasks), NIST frameworks (capability maturity) — all classify or reason, none score a dispatch action | Medium | Requires new GT mapping: what is the "correct" dispatch for each scenario? |
+| Dispatch-conditioned cost model | Expected operational cost scoring ties benchmark results directly to dollars, the language of security operations buyers | Medium | Cost matrix structure is established (ordinal cost via linear absolute loss); dollar values need domain validation |
+| Multi-site generalization testing | Equivalent to leave-one-domain-out in domain generalization literature; site types (solar/substation/commercial/campus) are the "domains" | High | Novel because: (a) site-specific GT already exists in schema, (b) no benchmark does this for physical security, (c) methodologically grounded in CVPR 2024 "Rethinking Evaluation Protocol" |
+| Semantic adversarial scenarios | Distinct from pixel-perturbation adversarial ML — context signal manipulation (authorized access presenting as intrusion) is "natural adversarial" and directly attacks the multi-signal reasoning the benchmark tests | Medium | Positions PSAI-Bench in natural adversarial examples literature, not input perturbation literature |
 
 ## Anti-Features
 
-| Feature | Why Requested | Why to Avoid | What to Do Instead |
-|---------|---------------|--------------|-------------------|
-| Video file bundling | Seems necessary for a "visual track" | Shipping 100+ GB of video files is incompatible with BYOS model, Apache-2.0 licensing of derived UCF Crime/Caltech content, and GitHub constraints. Explicit project constraint: "no video processing implementation — v3.0." | Ship `visual_data.uri` (existing) plus `visual_data.content_description` (new). Users who can process video use the URI. Users who can't use the structured description. Both are valid BYOS approaches. |
-| Real video frame extraction pipeline | Makes the frame extraction baseline "real" | Requires ffmpeg or cv2 dependency. Project constraint: "no new dependencies unless strictly needed." Frame extraction is the user's job; the baseline should simulate what a keyframe-based system would produce, not actually implement one. | Frame extraction baseline uses synthetic descriptions drawn from the scenario's `visual_ground_truth_description`. It demonstrates the design pattern and gives a score floor. |
-| Full video temporal analysis (ground truth from video processing) | Would make GT fully principled | Requires processing real video to determine GT — that's the user's system's job, not the benchmark's job. GT for visual scenarios must be determined at generation time. | GT is determined by the UCF Crime category and injected visual content description. Same deterministic-generation principle as metadata GT. |
-| Continuous temporal scoring (VUS, range-AUC) | Appropriate for time-series anomaly detection benchmarks (TSB-AD pattern) | PSAI-Bench produces discrete alerts (3-class per alert), not continuous anomaly scores over time. VUS metrics assume a continuous score signal with a sliding threshold. | Sequence-level scoring: escalation latency, correct-escalation rate, correct-resolution rate. These are discrete, interpretable, and domain-appropriate for security SOC workflows. |
-| Aggregate sequence score with time decay | Sounds sophisticated | Time decay weights assume earlier alerts matter less — opposite of security triage where early detection of an escalating threat is more valuable, not less. Any decay function encodes an arbitrary domain assumption. | Keep scoring transparent and separate: per-alert accuracy, escalation latency, resolution accuracy. Let operators weight by their priorities (existing pattern from v2.0). |
+Features to explicitly not build.
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| Single aggregate dispatch score | Hides which dispatch class is failing; a system that never calls armed response scores identically to one that always calls it — one hides threats, one bankrupts the client | Report per-class precision/recall + expected cost separately |
+| Cost model with hardcoded dollar amounts | $200-500 armed response, $5-15 operator review (VISION.md) are plausible but uncited assumptions; locking them in creates wrong baselines | Make cost values configurable parameters with documented defaults and a --cost-profile flag |
+| Collapsing dispatch into 3-class GT | Mapping armed_response→THREAT, patrol→SUSPICIOUS, auto_suppress→BENIGN loses the operational nuance (a patrol-to-restricted-zone is not the same as a SUSPICIOUS verdict) | Keep dispatch GT as its own 5-class taxonomy |
+| Adversarial scenarios that require video processing | v4.0 semantic adversarials are context-signal-level, not pixel-level — building video perturbation attacks is out of scope and out of domain | Stay in the textual/metadata adversarial space |
+| Training the benchmark on a single site, testing on the same | This is the status quo and what generalization testing is meant to challenge | Require hold-out site evaluation in the multi-site protocol |
+
+---
+
+## Feature Details by Area
+
+### 1. Five-Class Dispatch Decisions
+
+**What industry does:** Real GSOCs (HiveWatch, VectorFlow, similar) use AI to route alerts to action tiers. The typical taxonomy confirmed in industry sources: armed/law enforcement dispatch (highest urgency, highest cost), security patrol dispatch (medium urgency), operator review queue (human-in-loop), auto-suppress/resolve (verified benign), and request additional data (pan camera, check adjacent feeds). This is not a benchmark invention — it reflects actual GSOC decision flow.
+
+**Ground truth challenge:** Dispatch GT requires a documented decision function that combines verdict with site context. The same THREAT verdict at a solar perimeter → patrol; at a substation control room → armed response. The decision function must be published and auditable, consistent with v2.0 philosophy.
+
+**Output schema impact:**
+- Add `dispatch_action: "ARMED_RESPONSE" | "PATROL" | "OPERATOR_REVIEW" | "AUTO_SUPPRESS" | "REQUEST_DATA"` (required for v4.0 systems)
+- Keep `verdict: THREAT | SUSPICIOUS | BENIGN` (required for all; backward compat)
+- v1.0/v2.0/v3.0 outputs remain valid — scoring dispatches only when dispatch_action present
+
+**Ordinal structure:** Dispatch classes have a natural partial ordering by urgency and cost: ARMED_RESPONSE > PATROL > OPERATOR_REVIEW > AUTO_SUPPRESS, with REQUEST_DATA orthogonal (it's a data-gathering action, not a threat-response action). This partial order should inform the cost matrix design.
+
+### 2. Cost-Aware Scoring
+
+**Mathematical framework (HIGH confidence):** The ordinal cost-sensitive literature (PMC5217743) provides the standard approach:
+
+- Cost matrix C where C[i][j] = cost of predicting class j when true class is i
+- Total classification cost TC = trace(C × F^T) where F is the confusion matrix
+- For ordinal classes, off-diagonal entries scale with distance: C[i][j] ∝ |j - i|
+
+**For dispatch-specific costs:** The cost asymmetry is extreme and non-symmetric:
+- False ARMED_RESPONSE: ~$200-500 per dispatch (VISION.md estimate — needs validation)
+- Missed ARMED_RESPONSE when needed: catastrophic (life-safety or major loss)
+- OPERATOR_REVIEW when AUTO_SUPPRESS correct: ~$5-15 operator time
+- AUTO_SUPPRESS when OPERATOR_REVIEW needed: missed review opportunity (lower stakes)
+
+**Implementation approach:** Expected Operational Cost (EOC) metric:
+```
+EOC = sum over all scenarios: cost_matrix[true_dispatch][predicted_dispatch] / N
+```
+Report EOC alongside per-class precision/recall. Do not fold EOC into a single aggregate.
+
+**Cost profile configurability:** Users need to plug in their own cost assumptions. A `--cost-profile` option with a JSON cost matrix + a documented default profile that matches VISION.md's estimates. This is table stakes for the feature to be useful — a solar farm and a hospital have different cost structures.
+
+### 3. Multi-Site Generalization Testing
+
+**Domain generalization framing (HIGH confidence):** This maps directly to leave-one-domain-out (LODO) evaluation from the domain generalization literature. Site types = domains. Evaluation protocol: generate scenarios across N site types, hold out one site type, measure performance on the held-out site.
+
+**What the CVPR 2024 "Rethinking Evaluation Protocol" finding means for PSAI-Bench:** Validation data must come from the training distribution, not the test domain. For PSAI-Bench: any prompt tuning or system calibration a user does cannot use held-out-site scenarios. The evaluation protocol document must specify this constraint.
+
+**Site types in existing schema:** `site_type` field already exists in schema.py with enum ["solar", "substation", "commercial", "industrial", "campus"]. This is the domain taxonomy to use.
+
+**Generalization Gap metric:** GG = performance_on_trained_sites - performance_on_held_out_site. Report per site type, not just aggregate. A system that collapses on commercial sites but excels at solar is a different risk profile than one that degrades uniformly.
+
+**GT implications:** Some adversarial scenarios are site-specific by design (solar-specific wildlife, substation-specific environmental). GT distribution will differ across site types — this is expected and should be documented.
+
+### 4. Adversarial Robustness
+
+**PSAI-Bench adversarials are semantic, not pixel-perturbation (HIGH confidence):** The adversarial ML literature (NIST AI 100-2e2025, springer reviews) focuses on input perturbations, adversarial patches, and prompt injection. PSAI-Bench v4.0 adversarials are fundamentally different — they are "natural adversarial examples" where context signals are internally consistent but designed to produce a counterintuitive ground truth.
+
+**Four semantic adversarial categories for v4.0:**
+1. **Authorized-as-intrusion:** Person near restricted zone with expired badge credential, recent zone activity logged. Looks like authorized maintenance; GT = THREAT (badge expired, no active maintenance scheduled).
+2. **Loitering-as-authorized-waiting:** Person stationary near entrance for 15 min, during business hours, no badge event. Looks threatening; GT = BENIGN (scheduled delivery pickup, expected_activities includes it).
+3. **Environmental-as-human:** PIR trigger + camera detects moving object + thermal shows heat signature. Looks like THREAT; GT = BENIGN (confirmed via adjacent camera: HVAC exhaust duct).
+4. **Social engineering pattern:** Sequential badge attempts across multiple entry points across 20 min. Multi-alert temporal pattern; GT = THREAT. Requires sequence track to express properly.
+
+**Distinction from v2.0 adversarials:** v2.0 adversarials are signal-level conflicts (HIGH severity + BENIGN GT). v4.0 adversarials are scenario-level: the signals are consistent, but the correct reasoning requires domain knowledge that naive pattern-matching misses. This is the harder and more interesting case.
+
+**Robustness metric:** Adversarial Accuracy Drop (AAD) = accuracy_on_standard - accuracy_on_adversarial_subset. Report separately from overall metrics. A system with low AAD has robust reasoning; high AAD means it's pattern-matching on surface features.
 
 ---
 
 ## Feature Dependencies
 
 ```
-Schema: visual_ground_truth_description in visual_data
-    └──enables──> Visual-only scenario generation (GT derives from description, not context signals)
-    └──enables──> Contradictory scenario generation (metadata GT vs visual GT conflict)
-    └──enables──> Frame extraction baseline (baseline reads content_description field)
+dispatch_action field → updated output schema
+updated output schema → updated validation
+updated output schema → updated CLI score command
+cost-aware scoring → dispatch_action field (needs dispatch GT)
+cost-aware scoring → cost matrix configuration
+cost-aware scoring → Expected Operational Cost metric
 
-Schema: _meta.contradictory flag
-    └──enables──> Contradictory-specific accuracy reporting in scorer
-    └──enables──> Perception-reasoning gap metric computation
+multi-site generalization → site_type in scenarios (already exists)
+multi-site generalization → updated evaluation protocol document
+multi-site generalization → new CLI flag or sub-command for hold-out evaluation
 
-Schema: sequence_id + alert_index_in_sequence
-    └──enables──> TemporalSequenceGenerator
-    └──enables──> Temporal scoring path in scorer
-
-TemporalSequenceGenerator
-    └──depends on──> MetadataGenerator v2 (reuse context-dependent GT)
-    └──produces──> Linked alerts with escalating GT narrative
-    └──enables──> Temporal scoring
-
-Temporal scoring
-    └──depends on──> sequence_id grouping in scenarios
-    └──new component──> Separate from per-alert scoring
-    └──produces──> Escalation latency, correct-escalation rate
-
-Frame extraction baseline
-    └──depends on──> visual_ground_truth_description field
-    └──added to──> baselines.py
-    └──enables──> Visual track score floor
+adversarial scenarios → scenario generation updates
+adversarial scenarios → updated _meta schema (adversarial_type field)
+adversarial scenarios → Adversarial Accuracy Drop metric
 ```
 
 ---
 
-## Complexity and Phase Sequencing Rationale
+## MVP Recommendation for v4.0
 
-**Visual-only + contradictory scenarios (ship together):** Both depend on `visual_ground_truth_description` in the schema. Visual-only strips metadata signals; contradictory adds metadata that conflicts with visual content. Same schema extension gates both. Natural single phase.
+**Build first (blocks everything else):**
+1. Resolve two-layer vs. replace design decision — write decision record before touching schema
+2. Update OUTPUT_SCHEMA with dispatch_action (backward compatible)
+3. Update _META_SCHEMA with dispatch_gt and adversarial_type fields
+4. Define dispatch GT decision function and document it
 
-**Temporal sequences (separate phase):** The only feature that touches schema, generators, AND scorer simultaneously. Sequence-ID threading through the schema, a new generator class, a new scoring path, and new metrics. Highest implementation risk. Should be its own phase so it can slip independently without blocking visual track delivery.
+**Build second (core value):**
+5. Cost matrix framework with configurable cost profiles
+6. Expected Operational Cost metric + per-class dispatch breakdown
+7. Expand adversarial scenario generation with v4.0 semantic categories
+8. Adversarial Accuracy Drop metric
 
-**Frame extraction baseline (fast follow):** One new function in `baselines.py`, no schema changes, no new deps. Can ship with visual track or immediately after. LOW risk.
+**Build third (differentiator):**
+9. Multi-site generalization evaluation protocol and CLI
+10. Generalization Gap metric per site type
+11. Updated evaluation protocol document covering all four v4.0 additions
 
-**Evaluation protocol document:** Documents the evaluation procedure for all three new feature types. No code, but must reflect final decisions on GT definition, scoring protocol, and sequence evaluation rules. Should be the last artifact of v3.0, not the first.
+**Defer:**
+- Video-based adversarial scenarios (out of scope per VISION.md, too complex)
+- Automated cost profile inference (user provides cost matrix; benchmark doesn't guess it)
+- Multi-site scenario rebalancing (ensure site type distribution is documented, not forced-equal)
 
 ---
 
-## Concrete Complexity Estimates
+## Confidence Assessment
 
-| Feature | Estimated LOC | Test Surface | Risk |
-|---------|---------------|--------------|------|
-| Schema extension (visual content description + sequence fields) | ~20-40 | Schema validation tests | Low |
-| Visual-only generator | ~100-150 | 3-5 new test cases | Medium |
-| Contradictory scenario injection | ~80-120 | Edge cases: both signals agree, only one overrides | Medium |
-| Frame extraction baseline | ~30-50 | Baseline output format tests | Low |
-| Temporal sequence generator | ~200-300 | Sequence ordering, escalation logic, GT arc | High |
-| Temporal scorer | ~150-250 | Escalation latency computation, edge cases (all-BENIGN sequence, immediate-THREAT sequence) | High |
-| Perception-reasoning gap metric | ~30-50 | Derived from existing scorer output | Low |
-| Evaluation protocol doc | Non-code | N/A | Low |
+| Area | Confidence | Notes |
+|------|------------|-------|
+| 5-class dispatch taxonomy | HIGH | Confirmed against GSOC industry sources (HiveWatch, SIA) |
+| Cost matrix math framework | HIGH | PMC5217743, well-established ordinal classification literature |
+| Dollar cost estimates | LOW | VISION.md figures are plausible assumptions, not sourced from industry data |
+| Multi-site generalization methodology | HIGH | Direct mapping to domain generalization literature (LODO evaluation); CVPR 2024 evaluation protocol paper |
+| Adversarial scenario classification | HIGH | NIST AI 100-2e2025 confirms semantic adversarials are distinct from perturbation attacks |
+| No existing benchmark has 5-class dispatch evaluation | HIGH | CyberSOCEval (MCQ), ExCyTIn-Bench (agent tasks), SandboxAQ (maturity model) — none score operational dispatch actions |
 
 ---
 
 ## Sources
 
-- PSAI-Bench VISION.md — primary feature specification, contradiction and temporal sequence design
-- PSAI-Bench PROJECT.md — constraints (no video processing, no new deps, Apache-2.0)
-- GroundLie360 (2025): https://arxiv.org/html/2509.08008v1 — contradictory text-video benchmark pattern (misinformation domain, same mechanism)
-- TSB-AD benchmark: https://github.com/TheDatumOrg/TSB-AD — temporal anomaly scoring patterns; VUS-PR metric identified as inappropriate for discrete alert setting
-- Video-MME / AKS (CVPR 2025): https://arxiv.org/abs/2502.21271 — frame extraction baseline patterns; establishes that keyframe-vs-full-video is an active research question with measurable gaps
-- KDD 2025 survey on time-series anomaly detection: https://inria.hal.science/hal-05218929/file/kdd_survey.pdf — scoring patterns for alert-based evaluation
-
----
-*Research for PSAI-Bench v3.0 milestone*
-*Researched: 2026-04-13*
+- PMC5217743: Cost-Sensitive Performance Metric for Comparing Multiple Ordinal Classifiers — https://pmc.ncbi.nlm.nih.gov/articles/PMC5217743/
+- NIST AI 100-2e2025: Adversarial Machine Learning Taxonomy — https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-2e2025.pdf
+- CyberSOCEval (CrowdStrike + Meta, Sep 2025) — https://arxiv.org/html/2509.20166v2
+- Cost-Sensitive Evaluation for Binary Classifiers (arXiv 2510.22016) — https://arxiv.org/abs/2510.22016
+- CVPR 2024 "Rethinking the Evaluation Protocol of Domain Generalization" — https://openaccess.thecvf.com/content/CVPR2024/papers/Yu_Rethinking_the_Evaluation_Protocol_of_Domain_Generalization_CVPR_2024_paper.pdf
+- SIA "Transforming Physical Security: How AI is Changing the GSOC" (Mar 2025) — https://www.securityindustry.org/2025/03/03/transforming-physical-security-how-ai-is-changing-the-gsoc/
+- HiveWatch GSOC OS — https://hivewatch.com/gsoc-operating-system/
