@@ -154,11 +154,11 @@ Plans:
   2. Both overreach (metadata=THREAT, video=BENIGN) and underreach (metadata=BENIGN, video=THREAT) sub-types appear in generated batches
   3. An automated test asserts that `metadata_derived_gt != video_derived_gt` for all contradictory scenarios — no scenario has aligned metadata and video GT
   4. Contradictory description pools are present in `distributions.py` with plausible-but-wrong descriptions (not obviously wrong)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 13-01: Add CONTRADICTORY_THREAT_DESCRIPTIONS and CONTRADICTORY_BENIGN_DESCRIPTIONS pools to distributions.py
-- [ ] 13-02: Implement ContradictoryGenerator with dual GT storage and automated GT divergence test
+- [ ] 13-01-PLAN.md — Add description pools (CONTRADICTORY_THREAT_DESCRIPTIONS, CONTRADICTORY_BENIGN_DESCRIPTIONS) and implement ContradictoryGenerator in generators.py
+- [ ] 13-02-PLAN.md — Tests (conftest.py + test_contradictory.py) and CLI wiring (replace visual_contradictory UsageError stub)
 
 ### Phase 14: Temporal Sequences
 **Goal**: Users can generate temporal alert sequences of 3-5 related alerts with escalation narrative patterns threaded by sequence_id
