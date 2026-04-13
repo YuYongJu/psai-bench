@@ -21,6 +21,3 @@ data/generated/
 .coverage
 .pytest_cache/
 .ruff_cache/
-
-# Planning artifacts
-.planning/
