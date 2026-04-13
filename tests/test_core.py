@@ -139,11 +139,22 @@ class TestSchemaValidation:
         with pytest.raises(ValidationError):
             validate_output(out)
 
-    def test_output_missing_reasoning_fails(self):
+    def test_reasoning_optional_passes(self):
         out = _make_output("test-001", "THREAT")
         del out["reasoning"]
-        with pytest.raises(ValidationError):
-            validate_output(out)
+        validate_output(out)  # should not raise
+
+    def test_processing_time_optional_passes(self):
+        out = _make_output("test-001", "THREAT")
+        del out["processing_time_ms"]
+        validate_output(out)  # should not raise
+
+    def test_minimal_output_passes_schema(self):
+        validate_output({"alert_id": "test-minimal", "verdict": "THREAT", "confidence": 0.85})
+
+    def test_confidence_schema_description(self):
+        from psai_bench.schema import OUTPUT_SCHEMA
+        assert OUTPUT_SCHEMA["properties"]["confidence"]["description"] == "probability that the verdict is correct"
 
 
 # ---------------------------------------------------------------------------
