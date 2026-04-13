@@ -167,7 +167,10 @@ Plans:
   2. A logistic regression probe trained on non-site features (description, category, time, weather) to predict `site_type` scores at or below 60% accuracy — confirming no structural site leakage from non-site fields
   3. `psai-bench site-generalization --train solar --test commercial --outputs outputs.json` produces a per-site accuracy table and a generalization gap value
   4. `compute_site_generalization_gap()` is implemented in scorer.py alongside the existing scoring functions, not in a separate module
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 21-01-PLAN.md — compute_site_generalization_gap() in scorer.py + --site-type generate filter + site-generalization CLI command (SITE-01, SITE-03, SCORE-04)
+- [ ] 21-02-PLAN.md — Logistic regression site leakage audit as repeatable pytest test (SITE-02)
 
 ### Phase 22: CLI Integration, Tests, and Documentation
 **Goal**: All v4.0 features are wired, tested, and documented — the full test suite passes with no regressions, and users have a complete reference for dispatch scoring and the updated evaluation protocol
@@ -187,5 +190,5 @@ Plans:
 | 18. Schema and Cost Model Foundation | 2/2 | Complete    | 2026-04-13 |
 | 19. Scoring Pipeline and Baselines | 2/2 | Complete    | 2026-04-13 |
 | 20. Adversarial v4 Generator | 2/2 | Complete    | 2026-04-13 |
-| 21. Multi-Site Generalization | 0/? | Not started | - |
+| 21. Multi-Site Generalization | 0/2 | Not started | - |
 | 22. CLI Integration, Tests, and Documentation | 0/? | Not started | - |
