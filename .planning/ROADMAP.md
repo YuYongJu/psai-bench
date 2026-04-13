@@ -109,7 +109,7 @@ Plans:
 ## v4.0 Operational Realism — Phases 18-22
 
 - [x] **Phase 18: Schema and Cost Model Foundation** - Extend schema with dispatch field, define cost model, publish dispatch decision rubric (completed 2026-04-13)
-- [ ] **Phase 19: Scoring Pipeline and Baselines** - Add dispatch scoring function, extend dashboard, update all baselines
+- [x] **Phase 19: Scoring Pipeline and Baselines** - Add dispatch scoring function, extend dashboard, update all baselines (completed 2026-04-13)
 - [ ] **Phase 20: Adversarial v4 Generator** - Implement behavioral adversarial scenarios with isolated RNG and separate description pools
 - [ ] **Phase 21: Multi-Site Generalization** - Add site-type filtering, leakage audit, and generalization gap metric
 - [ ] **Phase 22: CLI Integration, Tests, and Documentation** - Wire all new commands, verify 100% backward compatibility, complete test suite
@@ -141,8 +141,8 @@ Plans:
   3. Running any of the 4 baselines against a v4.0 scenario set produces output JSON where every entry has a `dispatch` field with one of the 5 valid DISPATCH_ACTIONS values
 **Plans**: 2 plans
 Plans:
-- [ ] 19-01-PLAN.md — score_dispatch_run() in scorer.py + format_dashboard() cost_report extension (SCORE-01, SCORE-02)
-- [ ] 19-02-PLAN.md — VERDICT_TO_DEFAULT_DISPATCH mapping + dispatch field in all 4 baselines (SCORE-03)
+- [x] 19-01-PLAN.md — score_dispatch_run() in scorer.py + format_dashboard() cost_report extension (SCORE-01, SCORE-02)
+- [x] 19-02-PLAN.md — VERDICT_TO_DEFAULT_DISPATCH mapping + dispatch field in all 4 baselines (SCORE-03)
 
 ### Phase 20: Adversarial v4 Generator
 **Goal**: Users can generate behavioral adversarial scenarios where ground truth is assigned from context signals — not the deceptive narrative — and these scenarios are distinguishable from v2 signal-conflict adversarials
@@ -182,7 +182,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 18. Schema and Cost Model Foundation | 2/2 | Complete    | 2026-04-13 |
-| 19. Scoring Pipeline and Baselines | 0/2 | Not started | - |
+| 19. Scoring Pipeline and Baselines | 2/2 | Complete    | 2026-04-13 |
 | 20. Adversarial v4 Generator | 0/? | Not started | - |
 | 21. Multi-Site Generalization | 0/? | Not started | - |
 | 22. CLI Integration, Tests, and Documentation | 0/? | Not started | - |
