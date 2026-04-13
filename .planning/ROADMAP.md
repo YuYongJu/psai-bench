@@ -126,7 +126,10 @@ Plans:
   3. `cost_model.py` with a custom cost profile JSON reports expected cost at a minimum of 3 cost-ratio assumptions (low/medium/high)
   4. The dispatch decision rubric document (GT x site_type x zone_sensitivity -> optimal_dispatch table) exists and is referenced from DOC-01
   5. `scipy` is declared as a direct dependency in pyproject.toml and `pip install psai-bench` on a clean environment pulls it explicitly
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 18-01-PLAN.md — Schema extension (dispatch field, DISPATCH_ACTIONS, _meta fields, v4 version) + scipy fix + dispatch decision rubric
+- [ ] 18-02-PLAN.md — Cost model (cost_model.py: CostModel, DISPATCH_COSTS, compute_optimal_dispatch, score_dispatch, sensitivity analysis)
 
 ### Phase 19: Scoring Pipeline and Baselines
 **Goal**: Users who supply `dispatch` fields in their output get cost-aware scoring alongside the existing triage metrics — and all 4 baselines output dispatch decisions by default
@@ -175,7 +178,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 18. Schema and Cost Model Foundation | 0/? | Not started | - |
+| 18. Schema and Cost Model Foundation | 0/2 | Not started | - |
 | 19. Scoring Pipeline and Baselines | 0/? | Not started | - |
 | 20. Adversarial v4 Generator | 0/? | Not started | - |
 | 21. Multi-Site Generalization | 0/? | Not started | - |
