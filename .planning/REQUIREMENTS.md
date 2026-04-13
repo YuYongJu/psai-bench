@@ -70,39 +70,40 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DISP-01 | Pending | Pending |
-| DISP-02 | Pending | Pending |
-| DISP-03 | Pending | Pending |
-| DISP-04 | Pending | Pending |
-| DISP-05 | Pending | Pending |
-| COST-01 | Pending | Pending |
-| COST-02 | Pending | Pending |
-| COST-03 | Pending | Pending |
-| COST-04 | Pending | Pending |
-| COST-05 | Pending | Pending |
-| SCORE-01 | Pending | Pending |
-| SCORE-02 | Pending | Pending |
-| SCORE-03 | Pending | Pending |
-| SCORE-04 | Pending | Pending |
-| ADV-01 | Pending | Pending |
-| ADV-02 | Pending | Pending |
-| ADV-03 | Pending | Pending |
-| ADV-04 | Pending | Pending |
-| SITE-01 | Pending | Pending |
-| SITE-02 | Pending | Pending |
-| SITE-03 | Pending | Pending |
-| TEST-01 | Pending | Pending |
-| TEST-02 | Pending | Pending |
-| TEST-03 | Pending | Pending |
-| TEST-04 | Pending | Pending |
-| TEST-05 | Pending | Pending |
-| DOC-01 | Pending | Pending |
-| DOC-02 | Pending | Pending |
+| DISP-01 | Phase 18 | Pending |
+| DISP-02 | Phase 18 | Pending |
+| DISP-03 | Phase 18 | Pending |
+| DISP-04 | Phase 18 | Pending |
+| DISP-05 | Phase 18 | Pending |
+| COST-01 | Phase 18 | Pending |
+| COST-02 | Phase 18 | Pending |
+| COST-03 | Phase 18 | Pending |
+| COST-04 | Phase 18 | Pending |
+| COST-05 | Phase 18 | Pending |
+| DOC-01 | Phase 18 | Pending |
+| SCORE-01 | Phase 19 | Pending |
+| SCORE-02 | Phase 19 | Pending |
+| SCORE-03 | Phase 19 | Pending |
+| ADV-01 | Phase 20 | Pending |
+| ADV-02 | Phase 20 | Pending |
+| ADV-03 | Phase 20 | Pending |
+| ADV-04 | Phase 20 | Pending |
+| SITE-01 | Phase 21 | Pending |
+| SITE-02 | Phase 21 | Pending |
+| SITE-03 | Phase 21 | Pending |
+| SCORE-04 | Phase 21 | Pending |
+| TEST-01 | Phase 22 | Pending |
+| TEST-02 | Phase 22 | Pending |
+| TEST-03 | Phase 22 | Pending |
+| TEST-04 | Phase 22 | Pending |
+| TEST-05 | Phase 22 | Pending |
+| DOC-02 | Phase 22 | Pending |
 
 **Coverage:**
 - v4.0 requirements: 28 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 28
+- Mapped to phases: 28
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-13*
+*Traceability updated: 2026-04-13 after roadmap creation*

@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Operational Realism
 status: planning
-stopped_at: Milestone v4.0 started — defining requirements
-last_updated: "2026-04-13T21:15:00.000Z"
+stopped_at: Milestone v4.0 roadmap created — Phase 18 ready to plan
+last_updated: "2026-04-13T21:46:00.000Z"
 last_activity: 2026-04-13
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,40 +20,35 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-04-13)
 
-**Core value:** Non-trivially-solvable benchmark where no single input field reveals ground truth — extended to test whether video perception adds value over metadata-only triage
-**Current focus:** v3.0 — Perception-Reasoning Gap (Phase 11: Schema v3)
+**Core value:** Non-trivially-solvable benchmark extended to operational decision-support — measuring not just "what is this?" but "what should you do about it?"
+**Current focus:** v4.0 — Operational Realism (Phase 18: Schema and Cost Model Foundation)
 
 ## Current Position
 
-Phase: 17 of 17 (evaluation protocol)
+Phase: 18 of 22 (schema and cost model foundation)
 Plan: Not started
 Status: Ready to plan
 Last activity: 2026-04-13
 
-Progress: [████░░░░░░] 40% (v1.0 + v2.0 complete, v3.0 starting)
+Progress: [░░░░░░░░░░] 0% (v4.0 starting)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: ~18 (v1.0 + v2.0)
+- Total plans completed: ~28 (v1.0 + v2.0 + v3.0)
 - Average duration: unknown
 - Total execution time: unknown
 
-**By Phase:**
+**By Phase (v4.0):**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| v1.0 (1-5) | ~9 | - | - |
-| v2.0 (6-10) | 9 | - | - |
-| v3.0 (11-17) | 0/10 | - | - |
-| 11 | 2 | - | - |
-| 12 | 1 | - | - |
-| 13 | 2 | - | - |
-| 14 | 1 | - | - |
-| 15 | 2 | - | - |
-| 16 | 1 | - | - |
-| 17 | 1 | - | - |
+| 18 (schema + cost model) | 0/? | - | - |
+| 19 (scoring + baselines) | 0/? | - | - |
+| 20 (adversarial v4) | 0/? | - | - |
+| 21 (multi-site) | 0/? | - | - |
+| 22 (CLI + tests + docs) | 0/? | - | - |
 
 *Updated after each plan completion*
 
@@ -67,19 +62,27 @@ Progress: [████░░░░░░] 40% (v1.0 + v2.0 complete, v3.0 start
 - v3.0: Visual-only fields populated from shared description pools (not sentinels/nulls) — leakage test constraint settles the design conflict
 - v3.0: score_run() is a public contract — temporal scoring ships as separate score_sequences()
 - v3.0: Frame extraction is evaluation protocol, not benchmark code
+- v4.0: dispatch is a parallel optional field alongside verdict — never replaces 3-class triage (VERDICTS constant must not change)
+- v4.0: cost dollar values are provisional benchmark assumptions — expose --cost-profile flag, report at 3+ cost-ratio assumptions
+- v4.0: AdversarialV4Generator gets isolated RNG instance — prevents seed regression in existing tracks
+- v4.0: SCORE-04 (compute_site_generalization_gap) belongs in Phase 21 (multi-site) not Phase 19 — it measures site differences, not dispatch scoring
+- v4.0: DOC-01 (dispatch decision rubric) belongs in Phase 18 — compute_optimal_dispatch() depends on the decision table existing before implementation
 
 ### Pending Todos
 
-None yet.
+- Phase 18 research flag: cost dollar values are LOW confidence — label defaults as "provisional benchmark assumptions" in documentation
+- Phase 18 research flag: write compute_optimal_dispatch() decision table (GT x site_type x zone_sensitivity -> dispatch action) before implementing
+- Phase 20 research flag: document GT assignment rule for behavioral adversarials — signals determine GT, not narrative
+- Phase 21: run logistic regression leakage audit on non-site features before publishing generalization metric
 
 ### Blockers/Concerns
 
-- Pin seed-42 regression hash BEFORE any generator changes (highest-risk step — do it first in Phase 11)
-- Visual-only leakage test behavior unconfirmed until generator exists — run test_leakage.py immediately after first generation batch
-- Contradictory description pools must be plausible-but-wrong (not obviously wrong) — budget a review pass in Phase 13
+- scipy is imported in statistics.py but undeclared in pyproject.toml — fix in Phase 18 when touching pyproject.toml
+- VERDICTS constant touches 6 consumers — add DISPATCH_ACTIONS as separate constant, never change VERDICTS
+- Multi-site leakage audit (Phase 21) may reveal SITE_CATEGORY_BLOCKLIST creates structural site-identity signal — flag as potential scope risk
 
 ## Session Continuity
 
 Last session: 2026-04-13
-Stopped at: Roadmap created for v3.0, Phase 11 ready to plan
+Stopped at: Roadmap created for v4.0, Phase 18 ready to plan
 Resume file: None
