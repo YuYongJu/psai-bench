@@ -174,6 +174,9 @@ Plans:
   3. `docs/decision-rubric.md` is linked from the README (satisfies DOCS-03 publication requirement)
   4. Results table in README reflects v2.0 scenarios or is explicitly removed with a note explaining why (v1.0 results are invalid under new scenarios)
   5. A Known Limitations section exists in README that honestly states what v2.0 does and does not test (e.g., no video track, no multi-annotator GT, 3-class triage only)
+**Plans**: 1 plan
+Plans:
+- [ ] 10-01-PLAN.md — Rewrite README.md for v2.0 BYOS workflow, reposition evaluators, update results, add limitations
 
 ## Progress
 
@@ -190,5 +193,5 @@ Phases execute strictly in numeric order: 6 → 7 → 8 → 9 → 10
 | 6. Scenario Generation Rebuild | v2.0 | 0/2 | Not started | - |
 | 7. Testing and Verification | v2.0 | 0/2 | Not started | - |
 | 8. Decision Rubric Documentation | v2.0 | 0/1 | Not started | - |
-| 9. Scoring and Schema Updates | v2.0 | 0/? | Not started | - |
-| 10. Documentation and Release | v2.0 | 0/? | Not started | - |
+| 9. Scoring and Schema Updates | v2.0 | 0/3 | Not started | - |
+| 10. Documentation and Release | v2.0 | 0/1 | Not started | - |
