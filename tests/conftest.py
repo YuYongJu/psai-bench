@@ -38,3 +38,13 @@ def visual_only_scenarios_200():
     """
     from psai_bench.generators import VisualOnlyGenerator
     return VisualOnlyGenerator(seed=42).generate(200)
+
+
+@pytest.fixture(scope="session")
+def contradictory_scenarios_200():
+    """200 contradictory scenarios for Phase 13 test suite.
+
+    Uses seed=42 for reproducibility. Generated once per session.
+    """
+    from psai_bench.generators import ContradictoryGenerator
+    return ContradictoryGenerator(seed=42).generate(200)
