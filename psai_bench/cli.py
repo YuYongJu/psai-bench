@@ -28,6 +28,7 @@ def main():
     type=click.Choice([
         "metadata", "visual", "multi_sensor",
         "visual_only", "visual_contradictory", "temporal",
+        "adversarial_v4",
     ]),
     required=True,
 )
@@ -89,6 +90,11 @@ def generate(track: str, source: str, n: int | None, seed: int, output: str, gen
         count = n or 50
         scenarios = TemporalSequenceGenerator(seed=seed).generate(count)
         click.echo(f"Generated {count} temporal sequences ({len(scenarios)} total alerts)")
+    elif track == "adversarial_v4":
+        from psai_bench.generators import AdversarialV4Generator
+        count = n or 100
+        scenarios = AdversarialV4Generator(seed=seed).generate(count)
+        click.echo(f"Generated {count} adversarial v4 scenarios")
 
     version_suffix = f"_{gen_version}" if gen_version != "v1" else ""
     out_file = out_dir / f"{track}_{source}_seed{seed}{version_suffix}.json"
