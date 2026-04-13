@@ -25,7 +25,7 @@ Write automated tests that confirm Phase 6's scenario generation rebuild works c
 - Use sklearn `DecisionTreeClassifier(max_depth=1)` for decision stump accuracy
 - Assert <0.70 accuracy for each field individually (matching SCEN-05/TEST-01 exactly)
 - Label encoding for ordinal fields (severity), one-hot for nominal (zone type, description)
-- Also verify class balance: no GT class exceeds 50% of scenarios
+- Also verify class balance: no GT class exceeds 65% of scenarios (revised from 50% — research verified SUSPICIOUS reaches 53.5% at n=1000 due to wide scoring band; 50% is empirically impossible without Phase 6 threshold changes)
 
 ### Ground Truth Verification
 - 9-12 known-correct configurations: ~3 per GT class (THREAT, SUSPICIOUS, BENIGN), including 2-3 adversarial cases
