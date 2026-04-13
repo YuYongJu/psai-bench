@@ -355,6 +355,91 @@ def compute_perception_gap(
     return metadata_report.aggregate_score - visual_report.aggregate_score
 
 
+def compute_site_generalization_gap(
+    scenarios: list[dict],
+    outputs: list[dict],
+    train_site: str | None = None,
+    test_site: str | None = None,
+) -> dict:
+    """Compute per-site accuracy and generalization gap across site types.
+
+    Measures whether a system generalizes from one site type to another by
+    computing per-site accuracy and the gap between the best and worst sites.
+
+    Does NOT call score_run(). Accuracy is computed directly by matching
+    alert_ids between scenarios and outputs. Scenarios with no matching output
+    are counted as incorrect (same policy as _score_partition).
+
+    Args:
+        scenarios: List of scenario dicts. Each must have:
+            - alert_id
+            - context.site_type
+            - _meta.ground_truth
+        outputs: List of system output dicts with alert_id and verdict.
+        train_site: Optional site type used for training. If provided and present
+            in scenarios, the result includes a "train_accuracy" key.
+        test_site: Optional site type used for testing. If provided and present
+            in scenarios, the result includes a "test_accuracy" key.
+
+    Returns:
+        dict with keys:
+            - per_site_accuracy: {site_type: float} for all site types present
+            - generalization_gap: max(accs) - min(accs), or 0.0 if fewer than 2 sites
+            - train_site: the train_site argument (may be None)
+            - test_site: the test_site argument (may be None)
+            - train_accuracy: per_site_accuracy[train_site] if train_site is not None
+              and present in scenarios, else None
+            - test_accuracy: per_site_accuracy[test_site] if test_site is not None
+              and present in scenarios, else None
+    """
+    if not scenarios:
+        result: dict = {
+            "per_site_accuracy": {},
+            "generalization_gap": 0.0,
+            "train_site": train_site,
+            "test_site": test_site,
+        }
+        if train_site is not None:
+            result["train_accuracy"] = None
+        if test_site is not None:
+            result["test_accuracy"] = None
+        return result
+
+    # Build verdict lookup from outputs
+    output_map: dict[str, str] = {o["alert_id"]: o["verdict"] for o in outputs}
+
+    # Partition scenarios by site type and compute per-site accuracy
+    site_correct: dict[str, list[bool]] = {}
+    for s in scenarios:
+        site = s["context"]["site_type"]
+        gt = s["_meta"]["ground_truth"]
+        pred = output_map.get(s["alert_id"])  # None if missing → incorrect
+        is_correct = pred == gt
+        site_correct.setdefault(site, []).append(is_correct)
+
+    per_site_accuracy: dict[str, float] = {
+        site: sum(corrects) / len(corrects)
+        for site, corrects in site_correct.items()
+    }
+
+    accs = list(per_site_accuracy.values())
+    generalization_gap = (max(accs) - min(accs)) if len(accs) >= 2 else 0.0
+
+    result = {
+        "per_site_accuracy": per_site_accuracy,
+        "generalization_gap": generalization_gap,
+        "train_site": train_site,
+        "test_site": test_site,
+    }
+
+    if train_site is not None:
+        result["train_accuracy"] = per_site_accuracy.get(train_site)
+    if test_site is not None:
+        result["test_accuracy"] = per_site_accuracy.get(test_site)
+
+    return result
+
+
 def _safety_score(tdr: float, fasr: float, w_threat: float, w_false: float) -> float:
     """Compute Safety Score = (w_threat * TDR + w_false * FASR) / (w_threat + w_false)."""
     if w_threat + w_false == 0:
