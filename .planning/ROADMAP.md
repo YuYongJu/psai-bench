@@ -132,7 +132,9 @@ Plans:
   1. A `docs/decision-rubric.md` (or equivalent) file exists that describes the full decision function: which context signals are used, how they combine, and what threshold/logic produces each GT class
   2. The document contains at least three worked examples — one per GT class (THREAT, SUSPICIOUS, BENIGN) — showing a concrete scenario context and the step-by-step reasoning to its label
   3. The document explicitly calls out the adversarial cases: why HIGH severity can yield BENIGN and why LOW severity can yield THREAT
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 08-01-PLAN.md — Write docs/decision-rubric.md with full GT scoring logic, worked examples, and adversarial case explanations
 
 ### Phase 9: Scoring and Schema Updates
 **Goal**: Scoring reports a transparent metrics dashboard instead of a single opaque aggregate, ambiguous scenarios are handled separately, and the output schema accepts minimal non-LLM outputs
@@ -171,6 +173,6 @@ Phases execute strictly in numeric order: 6 → 7 → 8 → 9 → 10
 | 5. Documentation + Release | v1.0 | ?/? | Complete | 2026-04-13 |
 | 6. Scenario Generation Rebuild | v2.0 | 0/2 | Not started | - |
 | 7. Testing and Verification | v2.0 | 0/2 | Not started | - |
-| 8. Decision Rubric Documentation | v2.0 | 0/? | Not started | - |
+| 8. Decision Rubric Documentation | v2.0 | 0/1 | Not started | - |
 | 9. Scoring and Schema Updates | v2.0 | 0/? | Not started | - |
 | 10. Documentation and Release | v2.0 | 0/? | Not started | - |
