@@ -80,10 +80,10 @@ def generate(track: str, source: str, n: int | None, seed: int, output: str, gen
         scenarios = VisualOnlyGenerator(seed=seed).generate(count)
         click.echo(f"Generated {count} visual-only scenarios")
     elif track == "visual_contradictory":
-        raise click.UsageError(
-            "visual_contradictory track generator is not yet implemented (ships in Phase 13). "
-            "Use --track metadata or --track visual for now."
-        )
+        from psai_bench.generators import ContradictoryGenerator
+        count = n or 500
+        scenarios = ContradictoryGenerator(seed=seed).generate(count)
+        click.echo(f"Generated {count} visual-contradictory scenarios")
     elif track == "temporal":
         raise click.UsageError(
             "temporal track generator is not yet implemented (ships in Phase 14). "
