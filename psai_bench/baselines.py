@@ -6,7 +6,15 @@ Results from these baselines populate Section 7.2 of the specification.
 
 import numpy as np
 
-from psai_bench.schema import VERDICTS
+from psai_bench.schema import DISPATCH_ACTIONS, VERDICTS
+
+# Default dispatch action for each verdict class (per CONTEXT.md Phase 19 decision).
+# Derived from predicted verdict, not ground truth.
+VERDICT_TO_DEFAULT_DISPATCH: dict[str, str] = {
+    "THREAT":     "armed_response",
+    "SUSPICIOUS": "operator_review",
+    "BENIGN":     "auto_suppress",
+}
 
 
 def random_baseline(scenarios: list[dict], seed: int = 42) -> list[dict]:
@@ -21,6 +29,7 @@ def random_baseline(scenarios: list[dict], seed: int = 42) -> list[dict]:
         outputs.append({
             "alert_id": s["alert_id"],
             "verdict": verdict,
+            "dispatch": VERDICT_TO_DEFAULT_DISPATCH[verdict],
             "confidence": round(float(rng.uniform(0.3, 0.7)), 2),
             "reasoning": f"Random baseline: selected {verdict} uniformly at random.",
             "factors_considered": ["none (random)"],
@@ -50,6 +59,7 @@ def majority_class_baseline(scenarios: list[dict]) -> list[dict]:
         outputs.append({
             "alert_id": s["alert_id"],
             "verdict": majority,
+            "dispatch": VERDICT_TO_DEFAULT_DISPATCH[majority],
             "confidence": 0.99,
             "reasoning": f"Majority class baseline: always predicts {majority}.",
             "factors_considered": ["class distribution"],
@@ -76,6 +86,7 @@ def always_suspicious_baseline(scenarios: list[dict]) -> list[dict]:
         outputs.append({
             "alert_id": s["alert_id"],
             "verdict": "SUSPICIOUS",
+            "dispatch": VERDICT_TO_DEFAULT_DISPATCH["SUSPICIOUS"],
             "confidence": 0.50,
             "reasoning": "Always-suspicious baseline: every alert flagged for human review.",
             "factors_considered": ["none (constant prediction)"],
@@ -127,6 +138,7 @@ def severity_heuristic_baseline(scenarios: list[dict]) -> list[dict]:
         outputs.append({
             "alert_id": s["alert_id"],
             "verdict": verdict,
+            "dispatch": VERDICT_TO_DEFAULT_DISPATCH[verdict],
             "confidence": conf,
             "reasoning": (
                 f"Heuristic: severity={severity}, zone={zone_type}. "
