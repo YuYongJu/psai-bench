@@ -1,10 +1,30 @@
 [project]
 name = "psai-bench"
 version = "1.0.0rc1"
-description = "PSAI-Bench: Physical Security AI Triage Benchmark"
-readme = {text = "PSAI-Bench: Physical Security AI Triage Benchmark", content-type = "text/plain"}
+description = "PSAI-Bench: Physical Security AI Triage Benchmark — evaluates whether frontier AI models actually benefit from video in physical security triage"
+readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
+authors = [
+    {name = "Addison Apisar", email = "addison@panoptris.com"},
+]
+keywords = ["benchmark", "physical-security", "ai-evaluation", "triage", "llm", "video-analysis"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Security",
+]
+
+[project.urls]
+Homepage = "https://github.com/YuYongJu/psai-bench"
+Repository = "https://github.com/YuYongJu/psai-bench"
+Issues = "https://github.com/YuYongJu/psai-bench/issues"
 dependencies = [
     "numpy>=1.24",
     "pandas>=2.0",
@@ -19,7 +39,7 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "ruff>=0.1",
+    "ruff>=0.8",
 ]
 api = [
     "anthropic>=0.40",
@@ -36,6 +56,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["psai_bench*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
