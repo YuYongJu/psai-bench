@@ -787,3 +787,44 @@ class TestScoreReportSerialization:
         d = report.to_dict()
         assert isinstance(d["accuracy"], float)
         assert isinstance(d["n_scenarios"], int)
+
+
+# ---------------------------------------------------------------------------
+# Backward compatibility: default params produce v1-compatible output
+# ---------------------------------------------------------------------------
+
+class TestBackwardCompatibility:
+    """TEST-03 / SCEN-07: Default params produce v1-compatible output."""
+
+    def test_v1_schema_valid(self, v1_scenarios_default):
+        """Every v1 scenario must pass schema validation."""
+        for s in v1_scenarios_default[:100]:  # validate first 100 for speed
+            validate_alert(s)  # raises ValidationError if invalid
+
+    def test_v1_scenario_count(self, v1_scenarios_default):
+        """Default generation produces the requested count."""
+        assert len(v1_scenarios_default) == 3000
+
+    def test_v1_all_14_categories_present(self, v1_scenarios_default):
+        """v1 output includes all 14 UCF crime categories."""
+        categories = {s["_meta"]["source_category"] for s in v1_scenarios_default}
+        # UCF Crime dataset has 14 categories (13 anomaly + Normal)
+        assert len(categories) == 14, (
+            f"Expected 14 UCF categories, got {len(categories)}: {sorted(categories)}"
+        )
+
+    def test_v1_threat_heavy_distribution(self, v1_scenarios_default):
+        """v1 GT distribution is THREAT-heavy (>40% THREAT) as established by UCF category mappings."""
+        from collections import Counter
+        gt_counts = Counter(s["_meta"]["ground_truth"] for s in v1_scenarios_default)
+        threat_ratio = gt_counts["THREAT"] / len(v1_scenarios_default)
+        assert threat_ratio > 0.40, (
+            f"Expected THREAT > 40%, got {threat_ratio:.1%}. Distribution: {dict(gt_counts)}"
+        )
+
+    def test_v1_no_ambiguity_flag(self, v1_scenarios_default):
+        """v1 scenarios must NOT have ambiguity_flag in _meta (v2-only feature)."""
+        for s in v1_scenarios_default[:100]:  # check first 100 for speed
+            assert "ambiguity_flag" not in s["_meta"], (
+                f"Scenario {s['alert_id']} has ambiguity_flag in v1 output"
+            )
