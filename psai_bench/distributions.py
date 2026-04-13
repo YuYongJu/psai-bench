@@ -560,6 +560,53 @@ ACCESS_EVENTS = {
     "tailgate_detected": {"ground_truth_bias": "SUSPICIOUS", "weight": 0.05},
 }
 
+# ---------------------------------------------------------------------------
+# ADV-V4 behavioral adversarial description pools (v4)
+# ---------------------------------------------------------------------------
+# Each pool supplies deceptive descriptions for one behavioral adversarial pattern.
+# Descriptions are written to suggest the WRONG ground truth. The actual GT is
+# assigned by assign_ground_truth_v2 on the biased context signals — not by the description.
+# These pools are ISOLATED from all v2/v3 pools to prevent seed regression.
+
+# LOITERING_AS_WAITING: description suggests suspicious loitering (→ reader expects THREAT/SUSPICIOUS),
+# but context signals (badge recent, daytime, low-sensitivity zone) resolve to BENIGN.
+ADV_V4_LOITERING_AS_WAITING = [
+    "Person stationary near access point, 22 min without badge event — loitering pattern",
+    "Individual standing idle outside service gate, movement minimal, purpose unclear",
+    "Loitering alert: person near perimeter fence, no authorized purpose observed",
+    "Camera analytics: stationary human, zone-exterior, duration >15 min, flagged",
+    "Person pacing slowly near parking entry, repeated passes, no vehicle access logged",
+    "Individual at facility edge, stationary 28 min, no appointment on file",
+    "Loitering detection: human class object, east perimeter, 19:04, no egress",
+    "Person near equipment entrance, not entering, not leaving, identity unverified",
+]
+
+# AUTHORIZED_AS_INTRUSION: description suggests unauthorized entry (→ reader expects THREAT),
+# but context signals (recent badge grant <10 min, interior zone, low severity) resolve to BENIGN.
+ADV_V4_AUTHORIZED_AS_INTRUSION = [
+    "Unauthorized access attempt: person entered restricted corridor without visible escort",
+    "Intrusion indicator: individual bypassing primary checkpoint, movement purposeful",
+    "Access violation pattern: person moving through controlled zone, no logged credential",
+    "Camera alert: individual in server room area, unscheduled presence, 14:22",
+    "Person entered utility corridor via side door, entry method atypical for shift",
+    "Analytics: human in restricted zone during business hours, credential check pending",
+    "Individual traversing equipment hall, no escort visible, camera confidence 0.81",
+    "Access anomaly: person past badge barrier, movement toward high-value asset area",
+]
+
+# ENVIRONMENTAL_AS_HUMAN: description suggests human presence (→ reader expects THREAT/SUSPICIOUS),
+# but context signals (high-FPR device, wind/weather, parking/perimeter zone) resolve to BENIGN.
+ADV_V4_ENVIRONMENTAL_AS_HUMAN = [
+    "Human-class motion detected near panel array — gait analysis confidence 0.71",
+    "Camera analytics: person-shaped object at perimeter, thermal signature detected",
+    "Human presence alert: upright form detected at fence line, 03:14, zone-perimeter",
+    "AI classification: human silhouette, zone-exterior, movement purposeful, 02:47",
+    "Motion alert: two-limb bipedal movement pattern detected near utility corridor",
+    "Camera trigger: upright object at 1.6m height, consistent with human profile",
+    "Thermal: warm body-temperature signature detected near inverter station, stationary",
+    "Analytics engine: person class detected, east perimeter, confidence 0.68, night",
+]
+
 
 def sample_zone(rng: np.random.RandomState) -> dict:
     """Generate a random zone configuration."""
