@@ -112,6 +112,48 @@ class TestCLIGenerate:
         assert "Generated 5 multi-sensor scenarios" in result.output
 
 
+    def test_generate_metadata_ucf_v2(self, runner, tmp_path):
+        result = runner.invoke(main, [
+            "generate",
+            "--track", "metadata",
+            "--source", "ucf",
+            "--n", "20",
+            "--seed", "42",
+            "--version", "v2",
+            "--output", str(tmp_path),
+        ])
+        assert result.exit_code == 0
+        assert "Generated 20 UCF Crime metadata scenarios" in result.output
+        out_file = tmp_path / "metadata_ucf_seed42_v2.json"
+        assert out_file.exists()
+        with open(out_file) as f:
+            data = json.load(f)
+        assert len(data) == 20
+        assert data[0]["_meta"]["generation_version"] == "v2"
+        assert "ambiguity_flag" in data[0]["_meta"]
+
+    def test_generate_metadata_caltech_v2(self, runner, tmp_path):
+        result = runner.invoke(main, [
+            "generate",
+            "--track", "metadata",
+            "--source", "caltech",
+            "--n", "20",
+            "--seed", "42",
+            "--version", "v2",
+            "--output", str(tmp_path),
+        ])
+        assert result.exit_code == 0
+        assert "Generated 20 Caltech metadata scenarios" in result.output
+        out_file = tmp_path / "metadata_caltech_seed42_v2.json"
+        assert out_file.exists()
+        with open(out_file) as f:
+            data = json.load(f)
+        assert len(data) == 20
+        assert data[0]["_meta"]["generation_version"] == "v2"
+        assert "ambiguity_flag" in data[0]["_meta"]
+        assert "weighted_sum" in data[0]["_meta"]
+
+
 class TestCLIScore:
     """Test the score command."""
 

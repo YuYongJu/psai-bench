@@ -78,6 +78,35 @@ class TestLeakage:
         )
 
 
+def test_adversarial_pairs_present(v2_scenarios_1000):
+    """SCEN-04: Adversarial pairs with conflicting signals must exist in output."""
+    high_sev_benign = [
+        s for s in v2_scenarios_1000
+        if s["severity"] in ("HIGH", "CRITICAL") and s["_meta"]["ground_truth"] == "BENIGN"
+    ]
+    low_sev_threat = [
+        s for s in v2_scenarios_1000
+        if s["severity"] == "LOW" and s["_meta"]["ground_truth"] == "THREAT"
+    ]
+    assert len(high_sev_benign) > 0, "No HIGH/CRITICAL severity + BENIGN GT adversarial pairs found"
+    assert len(low_sev_threat) > 0, "No LOW severity + THREAT GT adversarial pairs found"
+
+
+def test_site_blocklist_enforced(v2_scenarios_1000):
+    """SCEN-06: Site-inappropriate categories are blocked in v2 output."""
+    for s in v2_scenarios_1000:
+        site = s["context"]["site_type"]
+        cat = s["_meta"]["source_category"]
+        if site == "solar":
+            assert cat not in ("Shoplifting", "RoadAccidents"), (
+                f"Solar site has blocked category {cat}"
+            )
+        if site in ("commercial", "industrial", "campus"):
+            assert cat != "RoadAccidents", (
+                f"{site} site has blocked category RoadAccidents"
+            )
+
+
 def test_class_balance(v2_scenarios_1000):
     """No single GT class should dominate the dataset.
 

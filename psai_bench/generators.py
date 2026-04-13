@@ -189,6 +189,20 @@ def _inject_adversarial_signals(
         return base_severity, zone_type, zone_sensitivity, new_time, new_fpr
 
 
+def _sample_valid_site(category: str, rng: np.random.RandomState) -> str:
+    """Sample a site type that isn't blocked for the given category."""
+    site_type = sample_site_type(rng)
+    for _ in range(10):
+        blocked = SITE_CATEGORY_BLOCKLIST.get(site_type, set())
+        if category not in blocked:
+            return site_type
+        site_type = sample_site_type(rng)
+    # Fallback: pick deterministically from valid sites
+    from psai_bench.distributions import SITE_TYPES
+    valid = [s for s in SITE_TYPES if category not in SITE_CATEGORY_BLOCKLIST.get(s, set())]
+    return rng.choice(valid) if valid else site_type
+
+
 class MetadataGenerator:
     """Generate Metadata Track scenarios from UCF Crime and Caltech Camera Traps annotations."""
 
@@ -225,12 +239,7 @@ class MetadataGenerator:
             weather = sample_weather(time_of_day, self.rng)
 
             # Sample site type, rejecting implausible category-site combos
-            site_type = sample_site_type(self.rng)
-            for _ in range(10):  # max 10 resamples
-                blocked = SITE_CATEGORY_BLOCKLIST.get(site_type, set())
-                if cat not in blocked:
-                    break
-                site_type = sample_site_type(self.rng)
+            site_type = _sample_valid_site(cat, self.rng)
 
             severity = self.rng.choice(mapping["severity_range"])
             description = self.rng.choice(mapping["description_templates"])
@@ -314,12 +323,7 @@ class MetadataGenerator:
             device = sample_device(zone["type"], self.rng)
             weather = sample_weather(time_of_day, self.rng)
 
-            site_type = sample_site_type(self.rng)
-            for _ in range(10):
-                blocked = SITE_CATEGORY_BLOCKLIST.get(site_type, set())
-                if cat not in blocked:
-                    break
-                site_type = sample_site_type(self.rng)
+            site_type = _sample_valid_site(cat, self.rng)
 
             badge_roll = self.rng.random()
             if badge_roll < 0.20:
