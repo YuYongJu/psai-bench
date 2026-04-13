@@ -99,13 +99,27 @@ class TestTask1TDD:
         except AttributeError as e:
             pytest.fail(f"validate_scenarios raised AttributeError on description=None: {e}")
 
-    def test6_visual_only_track_cli_raises_usage_error(self):
-        """Test 6: psai-bench generate --track visual_only raises UsageError with Phase 12 message."""
+    def test6_visual_only_track_cli_succeeds(self):
+        """Test 6: psai-bench generate --track visual_only now succeeds (Phase 12 implemented)."""
+        import json
+        import tempfile
+        from pathlib import Path
+
         from click.testing import CliRunner
+
         from psai_bench.cli import generate
+
         runner = CliRunner()
-        result = runner.invoke(generate, ["--track", "visual_only"])
-        assert result.exit_code != 0, "Expected non-zero exit for visual_only track"
-        assert "Phase 12" in (result.output or ""), (
-            f"Expected 'Phase 12' in error message, got: {result.output!r}"
-        )
+        with tempfile.TemporaryDirectory() as tmp:
+            result = runner.invoke(generate, [
+                "--track", "visual_only", "--n", "5", "--output", tmp,
+            ])
+            assert result.exit_code == 0, (
+                f"Expected exit_code 0 for visual_only track, got {result.exit_code}: {result.output!r}"
+            )
+            # Verify output file was written with correct scenarios
+            out_files = list(Path(tmp).glob("visual_only_*.json"))
+            assert len(out_files) == 1, f"Expected 1 output file, got: {out_files}"
+            data = json.loads(out_files[0].read_text())
+            assert len(data) == 5
+            assert all(s["track"] == "visual_only" for s in data)

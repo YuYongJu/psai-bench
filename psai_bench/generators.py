@@ -647,6 +647,109 @@ class VisualGenerator:
         return scenarios
 
 
+class VisualOnlyGenerator:
+    """Generate Visual-Only Track scenarios for the v3 perception-reasoning gap experiment.
+
+    Visual-only scenarios derive ground truth directly from UCF Crime video category labels
+    (video_category source), not from metadata signal weighting. There is no description or
+    severity field — the evaluated system must reason from video content alone.
+
+    RNG isolation: this generator owns its own np.random.RandomState and never shares it
+    with MetadataGenerator or any other generator (Pitfall 4 isolation rule).
+    """
+
+    def __init__(self, seed: int = 42):
+        self.rng = np.random.RandomState(seed)
+        self.seed = seed
+
+    def generate(self, n: int = 500) -> list[dict]:
+        """Generate n visual-only scenarios from UCF Crime categories.
+
+        Ground truth is derived directly from UCF_CATEGORY_MAP[category]["ground_truth"].
+        No description or severity key is present in the output dicts.
+        """
+        categories = list(UCF_CATEGORY_MAP.keys())
+        # Weight Normal higher to match real-world class imbalance — same as MetadataGenerator
+        # to avoid class imbalance leakage between tracks (VIS-03, D-03).
+        weights = [1.0] * (len(categories) - 1) + [4.0]
+        weights_arr = np.array(weights) / sum(weights)
+
+        resolutions = ["1280x720", "1920x1080", "640x480"]
+
+        scenarios = []
+        for i in range(n):
+            cat = self.rng.choice(categories, p=weights_arr)
+            mapping = UCF_CATEGORY_MAP[cat]
+
+            # GT comes from video category label, not metadata signal weighting (VIS-02)
+            gt = mapping["ground_truth"]
+
+            # Same TOD distribution as MetadataGenerator — shared pools prevent leakage (VIS-03)
+            tod_weights = TOD_WEIGHTS_THREAT if gt == "THREAT" else TOD_WEIGHTS_BENIGN
+            time_of_day = self.rng.choice(TOD_OPTIONS, p=tod_weights)
+
+            zone = sample_zone(self.rng)
+            device = sample_device(zone["type"], self.rng)
+            weather = sample_weather(time_of_day, self.rng)
+
+            # Use valid-site sampler so solar/substation don't get Shoplifting etc.
+            site_type = _sample_valid_site(cat, self.rng)
+
+            difficulty = _assign_difficulty(
+                cat, zone["sensitivity"], time_of_day, device["false_positive_rate"],
+                self.rng, dataset="ucf_crime",
+            )
+
+            # Synthetic URI — deterministic, no I/O required (T-12-01: intentional design)
+            uri = f"ucf-crime/test/{cat}/{i:05d}.mp4"
+            duration_sec = round(float(self.rng.uniform(4.0, 120.0)), 1)
+            resolution = self.rng.choice(resolutions)
+
+            alert = {
+                "alert_id": f"ucf-visual-only-{i:05d}",
+                "timestamp": _generate_timestamp(time_of_day, self.rng),
+                "track": "visual_only",
+                # severity and description intentionally omitted (VIS-01, VIS-04)
+                "source_type": "camera",
+                "zone": zone,
+                "device": device,
+                "context": {
+                    "recent_zone_events_1h": _generate_recent_events(
+                        zone["type"], time_of_day, self.rng
+                    ),
+                    "recent_badge_access_1h": [],
+                    "weather": weather,
+                    "time_of_day": time_of_day,
+                    "expected_activities": EXPECTED_ACTIVITIES.get(site_type, []),
+                    "cross_zone_activity": {},
+                    "site_type": site_type,
+                },
+                "visual_data": {
+                    "type": "video_clip",
+                    "uri": uri,
+                    "duration_sec": duration_sec,
+                    "resolution": resolution,
+                    "keyframe_uris": [],
+                },
+                "additional_sensors": [],
+                "_meta": {
+                    "ground_truth": gt,
+                    "difficulty": difficulty,
+                    "source_dataset": "ucf_crime",
+                    "source_category": cat,
+                    "seed": self.seed,
+                    "index": i,
+                    "generation_version": "v3",
+                    "visual_gt_source": "video_category",  # VIS-02
+                    "adversarial": False,
+                    "ambiguity_flag": False,
+                },
+            }
+            scenarios.append(alert)
+
+        return scenarios
+
+
 class MultiSensorGenerator:
     """Generate Multi-Sensor Track scenarios with fused sensor data."""
 
