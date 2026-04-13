@@ -104,7 +104,7 @@ Plans:
 - [ ] **Phase 7: Testing and Verification** - Verify leakage is eliminated, backward compatibility holds, and ambiguous scenario metadata is correct
 - [ ] **Phase 8: Decision Rubric Documentation** - Publish the GT assignment logic as a standalone document with worked examples
 - [ ] **Phase 9: Scoring and Schema Updates** - Replace opaque aggregate with separate metrics dashboard and simplify output schema
-- [ ] **Phase 10: Documentation and Release** - Update README for BYOS workflow, document built-in evaluators as examples, publish v2.0
+- [x] **Phase 10: Documentation and Release** - Update README for BYOS workflow, document built-in evaluators as examples, publish v2.0 (completed 2026-04-13)
 
 ### Phase 6: Scenario Generation Rebuild
 **Goal**: Generated scenarios are non-trivially-solvable — no single field predicts ground truth, descriptions are shared across GT classes, severity is noisy, adversarial cases exist, and site-inappropriate categories are removed
@@ -176,7 +176,7 @@ Plans:
   5. A Known Limitations section exists in README that honestly states what v2.0 does and does not test (e.g., no video track, no multi-annotator GT, 3-class triage only)
 **Plans**: 1 plan
 Plans:
-- [ ] 10-01-PLAN.md — Rewrite README.md for v2.0 BYOS workflow, reposition evaluators, update results, add limitations
+- [x] 10-01-PLAN.md — Rewrite README.md for v2.0 BYOS workflow, reposition evaluators, update results, add limitations
 
 ## Progress
 
@@ -194,4 +194,4 @@ Phases execute strictly in numeric order: 6 → 7 → 8 → 9 → 10
 | 7. Testing and Verification | v2.0 | 0/2 | Not started | - |
 | 8. Decision Rubric Documentation | v2.0 | 0/1 | Not started | - |
 | 9. Scoring and Schema Updates | v2.0 | 0/3 | Not started | - |
-| 10. Documentation and Release | v2.0 | 0/1 | Not started | - |
+| 10. Documentation and Release | v2.0 | 1/1 | Complete    | 2026-04-13 |
