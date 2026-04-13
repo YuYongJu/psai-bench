@@ -1,50 +1,29 @@
-# Project State
-
-## Project Reference
-
-See: .planning/PROJECT.md (updated 2026-04-12)
-
-**Core value:** Rigorous benchmark revealing whether AI video analysis adds real value to physical security triage
-**Current focus:** Phase 1 — Repository Hygiene
+# State
 
 ## Current Position
 
-Phase: 1 of 5 (Repository Hygiene)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-04-12 — Roadmap created, ready to begin Phase 1
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-13 — Milestone v2.0 started
 
-Progress: [░░░░░░░░░░] 0%
+## Project Reference
 
-## Performance Metrics
+See: .planning/PROJECT.md (updated 2026-04-13)
 
-**Velocity:**
-- Total plans completed: 0
-- Average duration: —
-- Total execution time: 0 hours
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| - | - | - | - |
-
-**Recent Trend:**
-- Last 5 plans: —
-- Trend: —
-
-*Updated after each plan completion*
+**Core value:** Non-trivially-solvable benchmark where no single input field reveals ground truth
+**Current focus:** v2.0 — Fix the Foundation
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- Pre-roadmap: Keep results/ in repo as example outputs (pending confirmation before Phase 5)
-- Pre-roadmap: Generated data must leave git history before public push (git-filter-repo required)
-- Pre-roadmap: Apache-2.0 license declared in pyproject.toml but LICENSE file does not exist yet
+- v1.0: Infrastructure is solid (CLI, scoring engine, stats, CI, 103 tests) — keep
+- v1.0: Scenario generation has critical leakage — rebuild
+- v1.0: Aggregate scoring formula is opaque — replace with separate metrics
+- v1.0: Output schema forces LLM assumptions — simplify
+- v2.0: Context-dependent GT is the core design change
+- v2.0: "Bring Your Own System" is the primary workflow, built-in evaluators are examples
 
 ### Pending Todos
 
@@ -52,13 +31,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- **Phase 1**: Git history rewrite (git-filter-repo) must happen before any public push — irreversible after clones exist
-- **Phase 3**: CI tests must not open data/generated/ files without a generate step; mocking strategy needed
-- **Phase 4**: Confirm google-genai is the correct current PyPI package name before writing optional dep install steps
-- **Phase 5**: results/ permanence decision must be made before writing README results table
+- Decision rubric for context-dependent GT needs careful design — determines benchmark quality
+- Backward compatibility: default params must still produce v1.0-compatible output
+- Existing GPT-4o results will be invalid under new scenarios — document this
 
 ## Session Continuity
 
-Last session: 2026-04-12
-Stopped at: Roadmap created. No plans written yet.
+Last session: 2026-04-13
+Stopped at: Milestone v2.0 initialized, defining requirements
 Resume file: None
