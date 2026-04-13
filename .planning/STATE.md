@@ -1,18 +1,35 @@
 # State
 
-## Current Position
-
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-04-13 — Milestone v2.0 started
-
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-04-13)
 
 **Core value:** Non-trivially-solvable benchmark where no single input field reveals ground truth
-**Current focus:** v2.0 — Fix the Foundation
+**Current focus:** v2.0 — Fix the Foundation (Phase 6)
+
+## Current Position
+
+Phase: 6 of 10 (Scenario Generation Rebuild)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-04-13 — Milestone v2.0 roadmap created
+
+Progress: [██░░░░░░░░] 20% (v1.0 complete, v2.0 not started)
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: ~9 (v1.0)
+- Average duration: unknown
+- Total execution time: unknown
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| v1.0 (1-5) | ~9 | - | - |
+
+*Updated after each plan completion*
 
 ## Accumulated Context
 
@@ -32,11 +49,11 @@ None yet.
 ### Blockers/Concerns
 
 - Decision rubric for context-dependent GT needs careful design — determines benchmark quality
-- Backward compatibility: default params must still produce v1.0-compatible output
-- Existing GPT-4o results will be invalid under new scenarios — document this
+- Backward compatibility: default params must still produce v1.0-compatible output (SCEN-07, TEST-03)
+- Existing GPT-4o results will be invalid under new scenarios — document this (handled in DOCS-04)
 
 ## Session Continuity
 
 Last session: 2026-04-13
-Stopped at: Milestone v2.0 initialized, defining requirements
+Stopped at: Roadmap created for v2.0, Phase 6 ready to plan
 Resume file: None
