@@ -211,10 +211,10 @@ Plans:
   1. `docs/EVALUATION_PROTOCOL.md` exists and defines GT derivation rules for all four tracks (metadata, visual_only, visual_contradictory, temporal) with worked examples
   2. The document specifies the frame extraction baseline procedure: uniform N-frame sampling, never using anomaly_segments for selection, deterministic given seed
   3. The document explains which scoring function applies to which track (score_run vs score_sequences) and how to interpret cross-track comparisons
-**Plans**: 2 plans
+**Plans**: 1 plan
 
 Plans:
-- [ ] 17-01: Write docs/EVALUATION_PROTOCOL.md with GT definitions, scoring protocol, and frame extraction baseline specification
+- [ ] 17-01-PLAN.md — Write docs/EVALUATION_PROTOCOL.md with GT definitions, scoring protocol, and frame extraction baseline specification
 
 ## Progress
 
