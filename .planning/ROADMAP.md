@@ -198,10 +198,10 @@ Plans:
   1. `psai-bench generate --track [visual_only|visual_contradictory|temporal] --help` shows valid options and exits 0
   2. `psai-bench score-sequences results.json` runs against a temporal results file and prints a SequenceScoreReport summary
   3. `psai-bench analyze-frame-gap metadata_results.json visual_results.json` computes and prints the perception-reasoning gap metric
-**Plans**: 2 plans
+**Plans**: 1 plan
 
 Plans:
-- [ ] 16-01: Extend --track choices; add score-sequences and analyze-frame-gap CLI subcommands; add opencv-python-headless to [visual] optional group in pyproject.toml
+- [ ] 16-01-PLAN.md — Add [visual] dep group, frame_extraction.py, score-sequences and analyze-frame-gap CLI subcommands
 
 ### Phase 17: Evaluation Protocol
 **Goal**: A researcher can understand exactly how to evaluate any system against all four tracks using only the published documentation
