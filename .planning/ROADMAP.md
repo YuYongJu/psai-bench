@@ -134,7 +134,7 @@ Plans:
   3. The document explicitly calls out the adversarial cases: why HIGH severity can yield BENIGN and why LOW severity can yield THREAT
 **Plans**: 1 plan
 Plans:
-- [ ] 08-01-PLAN.md — Write docs/decision-rubric.md with full GT scoring logic, worked examples, and adversarial case explanations
+- [x] 08-01-PLAN.md — Write docs/decision-rubric.md with full GT scoring logic, worked examples, and adversarial case explanations
 
 ### Phase 9: Scoring and Schema Updates
 **Goal**: Scoring reports a transparent metrics dashboard instead of a single opaque aggregate, ambiguous scenarios are handled separately, and the output schema accepts minimal non-LLM outputs
