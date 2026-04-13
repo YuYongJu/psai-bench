@@ -1,6 +1,6 @@
 # PSAI-Bench Evaluation Protocol
 
-Version: v3.0 — Covers all four evaluation tracks (Phases 11-16)
+Version: v4.0 — Adds dispatch scoring, cost model, multi-site generalization, and adversarial v4 (Phases 18-22)
 
 ---
 
@@ -780,6 +780,7 @@ temporal_gen = TemporalSequenceGenerator(seed=42)
 - `"v1"`: original metadata generator
 - `"v2"`: metadata generator with `assign_ground_truth_v2()` and adversarial injection
 - `"v3"`: visual-only, visual-contradictory, and temporal generators (Phases 11-14)
+- `"v4"`: adversarial v4 behavioral scenarios (Phase 20)
 
 When comparing systems across papers or runs, ensure the same generation version and
 seed are used. Version differences may change GT labels for the same scenario index.
@@ -796,3 +797,292 @@ psai-bench validate-submission --scenarios data/generated/scenarios.json \
 
 These commands check schema compliance, alert_id coverage, and verdict value validity
 before scoring begins.
+
+---
+
+## 11. Track 5: Adversarial v4 Behavioral Track
+
+### Overview
+
+The adversarial v4 track tests systems against behavioral deception: scenarios where
+ground truth is determined by context signals as usual, but the description text is
+crafted to suggest a different verdict. Unlike v2 adversarials (signal_conflict), v4
+adversarials use naturalistic behavioral framing — an authorized person described as
+suspicious, an animal described as human movement.
+
+### Adversarial Types
+
+| `_meta.adversarial_type` | Pattern | GT derivation |
+|--------------------------|---------|---------------|
+| `loitering_as_waiting`   | Subject in restricted zone described as waiting for a pickup | From zone+time+device signals |
+| `authorized_as_intrusion`| Authorized personnel described as an intruder | From badge access recency |
+| `environmental_as_human` | Animal or environmental trigger described as human activity | From device FPR + zone type |
+
+**Key invariant:** `_meta.adversarial_type` is `signal_conflict` for v2/v3 scenarios
+and one of the three behavioral types for v4. They must not be mixed.
+
+### GT Derivation
+
+Ground truth is assigned by `assign_ground_truth_v2()` on the actual context signals.
+The description narrative is deceptive — the GT is always from context, not narrative.
+
+### Schema Fields
+
+Every adversarial v4 scenario has:
+
+```python
+{
+    "track": "adversarial_v4",
+    "_meta": {
+        "ground_truth": "THREAT" | "SUSPICIOUS" | "BENIGN",
+        "adversarial": True,
+        "adversarial_type": "loitering_as_waiting" | "authorized_as_intrusion" | "environmental_as_human",
+        "generation_version": "v4",
+        ...
+    }
+}
+```
+
+### Scoring
+
+Scored with `score_run()`. No special scoring function — behavioral adversarials test
+whether the model uses context signals or falls for the deceptive narrative.
+
+```python
+from psai_bench.scorer import score_run
+report = score_run(scenarios, outputs)
+```
+
+### CLI
+
+```bash
+psai-bench generate --track adversarial_v4 --n 100 --seed 42 --output data/generated/
+```
+
+RNG isolation: `AdversarialV4Generator` owns its own `np.random.RandomState`. Generating
+adversarial v4 scenarios does not affect the RNG stream of any other generator.
+
+---
+
+## 12. Dispatch Scoring and Cost Model
+
+### Overview
+
+v4.0 adds optional dispatch scoring alongside the existing triage metrics. Systems that
+output a `dispatch` field in their results can be scored for operational cost-effectiveness.
+Dispatch scoring is additive — `score_run()` is unchanged and triage metrics are unaffected.
+
+The dispatch field accepts one of five actions:
+
+| Action | When to use |
+|--------|-------------|
+| `armed_response` | Confirmed threat at high-value or critical site |
+| `patrol` | Probable threat or high-sensitivity SUSPICIOUS event |
+| `operator_review` | Uncertain; needs human review |
+| `auto_suppress` | Reliable false alarm; safe to dismiss |
+| `request_data` | Borderline benign; gather more data before deciding |
+
+### Output Format
+
+System outputs must include `dispatch` alongside `verdict`:
+
+```json
+{
+    "alert_id": "ucf-meta-00042",
+    "verdict": "THREAT",
+    "dispatch": "armed_response",
+    "confidence": 0.91,
+    "reasoning": "...",
+    "processing_time_ms": 340
+}
+```
+
+The `dispatch` field is optional for backward compatibility — outputs without it are
+counted in `n_missing_dispatch` and excluded from cost scoring.
+
+### Scoring Function
+
+```python
+from psai_bench.scorer import score_dispatch_run
+from psai_bench.cost_model import CostModel
+
+# With default cost profile
+cost_report = score_dispatch_run(scenarios, outputs)
+
+# With custom cost profile
+custom_model = CostModel(
+    costs={(action, gt): cost for ...},  # override DISPATCH_COSTS
+    site_multipliers={"substation": 10.0, ...},  # override threat multipliers
+)
+cost_report = score_dispatch_run(scenarios, outputs, model=custom_model)
+```
+
+`score_dispatch_run()` does NOT call `score_run()`. Call both independently:
+
+```python
+triage_report  = score_run(scenarios, outputs)          # → ScoreReport
+dispatch_report = score_dispatch_run(scenarios, outputs) # → CostScoreReport
+```
+
+### CostScoreReport Fields
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `cost_ratio` | float | submitted_cost / optimal_cost. 1.0 = optimal; higher = worse |
+| `total_cost_usd` | float | Sum of effective costs for all scored scenarios |
+| `optimal_cost_usd` | float | Sum of costs if optimal action was taken for each scenario |
+| `mean_cost_usd` | float | total_cost_usd / n_scenarios |
+| `per_action_counts` | dict | Count of each submitted dispatch action |
+| `per_site_mean_cost` | dict | Mean cost broken down by site_type |
+| `n_missing_dispatch` | int | Outputs without a `dispatch` field (excluded from scoring) |
+| `sensitivity_profiles` | dict | Cost ratios under low/medium/high cost assumptions |
+
+### Cost Model
+
+Default costs are provisional benchmark assumptions defined in `psai_bench/cost_model.py`.
+See `docs/dispatch-decision-rubric.md` for the full cost table and override instructions.
+
+**Optimal dispatch** is computed by `compute_optimal_dispatch(gt, context)` from the
+decision table in `docs/dispatch-decision-rubric.md`. Rules (top-to-bottom, first match wins):
+
+- THREAT at substation/solar site → `armed_response`
+- THREAT with zone sensitivity ≥ 4 → `armed_response`
+- THREAT otherwise → `patrol`
+- SUSPICIOUS with sensitivity ≥ 4 → `patrol`
+- SUSPICIOUS otherwise → `operator_review`
+- BENIGN with device FPR ≥ 0.70 → `auto_suppress`
+- BENIGN with ≥ 3 recent zone events → `request_data`
+- BENIGN otherwise → `auto_suppress`
+
+### Sensitivity Analysis
+
+`CostScoreReport.sensitivity_profiles` contains cost ratios under three assumptions:
+
+| Profile | Description |
+|---------|-------------|
+| `low` | All costs × 0.5 |
+| `medium` | Default costs (same as main report) |
+| `high` | THREAT column costs × 2.0 (SUSPICIOUS/BENIGN unchanged) |
+
+### Dashboard Integration
+
+Pass `cost_report` to `format_dashboard()` to append the dispatch cost section:
+
+```python
+from psai_bench.scorer import format_dashboard, score_run, score_dispatch_run
+
+triage = score_run(scenarios, outputs)
+dispatch = score_dispatch_run(scenarios, outputs)
+print(format_dashboard(triage, cost_report=dispatch))
+```
+
+Omitting `cost_report` produces output byte-identical to the v3.0 dashboard (backward compat).
+
+### CLI
+
+The `score` command scores triage only. To score dispatch, use Python directly:
+
+```python
+import json
+from psai_bench.scorer import score_run, score_dispatch_run, format_dashboard
+
+with open("scenarios.json") as f:
+    scenarios = json.load(f)
+with open("outputs.json") as f:
+    outputs = json.load(f)
+
+print(format_dashboard(score_run(scenarios, outputs), cost_report=score_dispatch_run(scenarios, outputs)))
+```
+
+---
+
+## 13. Multi-Site Generalization
+
+### Overview
+
+v4.0 adds a generalization gap metric that measures how well a system trained or tuned
+on one site type performs when evaluated on a different site type. A system that overfits
+to substation scenarios will exhibit a large generalization gap when evaluated on campus
+or commercial scenarios.
+
+### Leakage Audit
+
+Before using the generalization metric, confirm that site identity is not structurally
+inferable from non-site features (description, category, time, weather). A logistic
+regression probe trained only on non-site features to predict `site_type` must score at
+or below 60% accuracy. This audit is implemented as a pytest test in `tests/test_site_leakage.py`.
+
+Run: `pytest tests/test_site_leakage.py -v`
+
+The audit must pass before interpreting generalization gap values. If the audit fails,
+site-type information has leaked into non-site features and gap values are confounded.
+
+### Scoring Function
+
+```python
+from psai_bench.scorer import compute_site_generalization_gap
+
+result = compute_site_generalization_gap(
+    scenarios,  # list of scenario dicts (must have context.site_type and _meta.ground_truth)
+    outputs,    # list of output dicts (alert_id + verdict)
+    train_site="solar",       # optional: include train_accuracy in result
+    test_site="commercial",   # optional: include test_accuracy in result
+)
+```
+
+**Does NOT call `score_run()`** — accuracy is computed directly from alert_id matching.
+Missing outputs count as incorrect (same policy as `_score_partition`).
+
+### Return Value
+
+```python
+{
+    "per_site_accuracy": {"solar": 0.82, "commercial": 0.61, ...},
+    "generalization_gap": 0.21,  # max(accs) - min(accs); 0.0 if fewer than 2 sites
+    "train_site": "solar",       # echoes argument
+    "test_site": "commercial",   # echoes argument
+    "train_accuracy": 0.82,      # per_site_accuracy[train_site], or None if absent
+    "test_accuracy": 0.61,       # per_site_accuracy[test_site], or None if absent
+}
+```
+
+**Interpretation:** A `generalization_gap` below 0.10 indicates robust cross-site
+generalization. Values above 0.20 indicate meaningful site-specific overfitting.
+
+### Site-Type Filtering
+
+Generate site-specific scenario subsets with `--site-type`:
+
+```bash
+# Generate only solar scenarios (post-generation filter, seed-safe)
+psai-bench generate --track metadata --source ucf --n 300 --seed 42 --site-type solar
+
+# Full generation (superset — same seed)
+psai-bench generate --track metadata --source ucf --n 300 --seed 42
+```
+
+The filter runs after generation. The same seed produces the same full scenario set;
+`--site-type` is a pure post-generation filter and does not affect the RNG stream.
+
+### CLI Command
+
+```bash
+psai-bench site-generalization \
+  --scenarios data/generated/scenarios.json \
+  --outputs   results/model_outputs.json \
+  --train     solar \
+  --test      commercial
+```
+
+Output:
+```
+=== Per-Site Accuracy ===
+  campus          0.7241
+  commercial      0.6100
+  solar           0.8200
+  substation      0.7800
+
+Generalization gap: 0.2100
+Train site (solar): 0.8200
+Test site  (commercial):  0.6100
+```
