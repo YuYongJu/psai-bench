@@ -750,6 +750,193 @@ class VisualOnlyGenerator:
         return scenarios
 
 
+class ContradictoryGenerator:
+    """Generate Visual-Contradictory Track scenarios where metadata misrepresents video content.
+
+    Two sub-types:
+    - Overreach: metadata signals suggest THREAT, video content is BENIGN (Normal category)
+    - Underreach: metadata signals suggest BENIGN, video content is THREAT (anomaly category)
+
+    GT always follows video content. metadata_derived_gt is stored in _meta for analysis
+    but is never used as the final ground_truth.
+
+    RNG isolation: owns its own np.random.RandomState (Pitfall 4).
+    """
+
+    # THREAT-labeled UCF categories only (excludes SUSPICIOUS: Arrest, RoadAccidents, Shoplifting)
+    _UNDERREACH_CATEGORIES = [
+        "Abuse", "Arson", "Assault", "Burglary", "Explosion",
+        "Fighting", "Robbery", "Shooting", "Stealing", "Vandalism",
+    ]
+
+    def __init__(self, seed: int = 42):
+        self.rng = np.random.RandomState(seed)
+        self.seed = seed
+
+    def generate(self, n: int = 500) -> list[dict]:
+        """Generate n contradictory scenarios with guaranteed GT divergence.
+
+        Each scenario has _meta.metadata_derived_gt != _meta.video_derived_gt.
+        Final ground_truth always equals video_derived_gt.
+        """
+        from psai_bench.distributions import (
+            CONTRADICTORY_BENIGN_DESCRIPTIONS,
+            CONTRADICTORY_THREAT_DESCRIPTIONS,
+            assign_ground_truth_v2,
+        )
+
+        resolutions = ["1280x720", "1920x1080", "640x480"]
+        low_fpr_mean, low_fpr_std = 0.85, 0.08    # low_quality profile
+        high_fpr_mean, high_fpr_std = 0.30, 0.10  # high_quality profile
+
+        scenarios = []
+        i = 0
+        attempts = 0
+        max_attempts = n * 20  # safety ceiling
+
+        while len(scenarios) < n and attempts < max_attempts:
+            attempts += 1
+            idx = i  # monotonic scenario index
+
+            # Sub-type selection: ~50% overreach, ~50% underreach
+            is_overreach = self.rng.random() < 0.50
+
+            if is_overreach:
+                # OVERREACH: video=BENIGN (Normal), metadata signals biased toward THREAT
+                cat = "Normal"
+                video_derived_gt = UCF_CATEGORY_MAP[cat]["ground_truth"]  # "BENIGN"
+
+                zone_type = self.rng.choice(["restricted", "utility"])
+                zone_sensitivity = int(np.clip(self.rng.randint(4, 6), 1, 5))
+                time_of_day = self.rng.choice(["night", "dawn"])
+                severity = self.rng.choice(["HIGH", "CRITICAL"])
+                badge_minutes_ago = None
+                device_fpr = float(np.clip(self.rng.normal(low_fpr_mean, low_fpr_std), 0.01, 0.99))
+                description = self.rng.choice(CONTRADICTORY_THREAT_DESCRIPTIONS)
+            else:
+                # UNDERREACH: video=THREAT (anomaly category), metadata signals biased toward BENIGN
+                cat = self.rng.choice(self._UNDERREACH_CATEGORIES)
+                video_derived_gt = UCF_CATEGORY_MAP[cat]["ground_truth"]  # "THREAT"
+
+                zone_type = self.rng.choice(["parking", "interior"])
+                zone_sensitivity = int(np.clip(self.rng.randint(1, 3), 1, 5))
+                time_of_day = "day"
+                severity = "LOW"
+                badge_minutes_ago = int(self.rng.randint(1, 10))
+                device_fpr = float(np.clip(self.rng.normal(high_fpr_mean, high_fpr_std), 0.01, 0.99))
+                description = self.rng.choice(CONTRADICTORY_BENIGN_DESCRIPTIONS)
+
+            # Compute metadata_derived_gt from biased signals — must differ from video_derived_gt.
+            # Retry by resampling zone and time if they accidentally agree (up to 10 retries).
+            agreed = True
+            for _retry in range(11):
+                metadata_derived_gt, _ws, _amb = assign_ground_truth_v2(
+                    zone_type=zone_type,
+                    zone_sensitivity=zone_sensitivity,
+                    time_of_day=time_of_day,
+                    device_fpr=device_fpr,
+                    severity=severity,
+                    badge_access_minutes_ago=badge_minutes_ago,
+                    rng=self.rng,
+                )
+                if metadata_derived_gt != video_derived_gt:
+                    agreed = False
+                    break
+                # Resample zone and time only (not sub-type or category)
+                if is_overreach:
+                    zone_type = self.rng.choice(["restricted", "utility"])
+                    zone_sensitivity = int(np.clip(self.rng.randint(4, 6), 1, 5))
+                    time_of_day = self.rng.choice(["night", "dawn"])
+                else:
+                    zone_type = self.rng.choice(["parking", "interior"])
+                    zone_sensitivity = int(np.clip(self.rng.randint(1, 3), 1, 5))
+
+            if agreed:
+                # After 10 retries, GTs still agree — skip this scenario
+                i += 1
+                continue
+
+            # Build remaining fields
+            zone_name = self.rng.choice(list(UCF_CATEGORY_MAP.keys()))  # placeholder draw consumed
+            zone = {
+                "id": f"zone-{self.rng.randint(100, 999)}",
+                "name": self.rng.choice(
+                    ["North Fence Line", "East Perimeter", "Control Room", "Transformer Yard",
+                     "Main Parking Lot", "Equipment Hall", "SCADA Room", "Inverter Station"]
+                ),
+                "type": zone_type,
+                "sensitivity": zone_sensitivity,
+                "operating_hours": "24/7",
+            }
+
+            device = sample_device(zone_type, self.rng)
+            device["false_positive_rate"] = round(device_fpr, 3)
+
+            weather = sample_weather(time_of_day, self.rng)
+            site_type = _sample_valid_site(cat, self.rng)
+
+            duration_sec = round(float(self.rng.uniform(4.0, 120.0)), 1)
+            resolution = self.rng.choice(resolutions)
+
+            difficulty = _assign_difficulty(
+                cat, zone_sensitivity, time_of_day, device_fpr,
+                self.rng, dataset="ucf_crime",
+            )
+
+            alert = {
+                "alert_id": f"ucf-contradictory-{idx:05d}",
+                "timestamp": _generate_timestamp(time_of_day, self.rng),
+                "track": "visual_contradictory",
+                "severity": severity,
+                "description": description,
+                "source_type": "camera",
+                "zone": zone,
+                "device": device,
+                "context": {
+                    "recent_zone_events_1h": _generate_recent_events(
+                        zone_type, time_of_day, self.rng
+                    ),
+                    "recent_badge_access_1h": (
+                        [{"minutes_ago": badge_minutes_ago, "event_type": "badge_granted",
+                          "resolved": True}]
+                        if badge_minutes_ago is not None else []
+                    ),
+                    "weather": weather,
+                    "time_of_day": time_of_day,
+                    "expected_activities": EXPECTED_ACTIVITIES.get(site_type, []),
+                    "cross_zone_activity": {},
+                    "site_type": site_type,
+                },
+                "visual_data": {
+                    "type": "video_clip",
+                    "uri": f"ucf-crime/test/{cat}/{idx:05d}.mp4",
+                    "duration_sec": duration_sec,
+                    "resolution": resolution,
+                    "keyframe_uris": [],
+                },
+                "additional_sensors": [],
+                "_meta": {
+                    "ground_truth": video_derived_gt,
+                    "video_derived_gt": video_derived_gt,
+                    "metadata_derived_gt": metadata_derived_gt,
+                    "contradictory": True,
+                    "visual_gt_source": "video_category",
+                    "difficulty": difficulty,
+                    "source_dataset": "ucf_crime",
+                    "source_category": cat,
+                    "seed": self.seed,
+                    "index": idx,
+                    "generation_version": "v3",
+                    "adversarial": False,
+                    "ambiguity_flag": False,
+                },
+            }
+            scenarios.append(alert)
+            i += 1
+
+        return scenarios
+
+
 class MultiSensorGenerator:
     """Generate Multi-Sensor Track scenarios with fused sensor data."""
 
