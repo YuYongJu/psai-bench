@@ -210,22 +210,18 @@ def test_17_sensitivity_profiles_structure():
 
 
 def test_18_perfect_dispatcher_cost_ratio_one():
-    """For perfect dispatcher (all actions match optimal), cost_ratio == 1.0."""
-    # THREAT at substation, sensitivity 5 → optimal is armed_response
-    s = _make_scenario(gt="THREAT", site="substation", sensitivity=5)
-    # Optimal: armed_response (cost = 0.0 for THREAT), but we need > 0 to get ratio.
-    # Use BENIGN with reliable device, few events → auto_suppress (cost 0.0 for BENIGN).
-    # Actually cost(armed_response, THREAT) = 0.0 × multiplier = 0.0.
-    # Use commercial SUSPICIOUS sensitivity=2 → operator_review, cost(operator_review, SUSPICIOUS)=0.0
-    s2 = _make_scenario(gt="SUSPICIOUS", site="commercial", sensitivity=2)
-    s2["alert_id"] = "test-suspicious-commercial"
-    o2 = _make_output(s2["alert_id"], dispatch="operator_review")
-    # Also use BENIGN auto_suppress (cost=0.0 for BENIGN)
-    s3 = _make_scenario(gt="BENIGN", site="commercial", sensitivity=2, fpr=0.85)
-    s3["alert_id"] = "test-benign-commercial"
-    o3 = _make_output(s3["alert_id"], dispatch="auto_suppress")
-    report = score_dispatch([s, s2, s3], [_make_output(s["alert_id"]), o2, o3])
-    # All optimal → cost_ratio should be 1.0
+    """For perfect dispatcher (all actions match optimal), cost_ratio == 1.0.
+
+    Uses BENIGN + low FPR + 5 recent events → optimal is request_data (cost 15.0).
+    This produces non-zero submitted and optimal costs so total/optimal = 1.0.
+    """
+    # BENIGN, reliable device (FPR=0.20 < 0.70), 5 recent events → optimal = request_data
+    s = _make_scenario(gt="BENIGN", site="commercial", sensitivity=2, fpr=0.20, n_recent=5)
+    o = _make_output(s["alert_id"], dispatch="request_data")  # matches optimal
+    report = score_dispatch([s], [o])
+    # submitted_cost = cost(request_data, BENIGN) = 15.0
+    # optimal_cost  = cost(request_data, BENIGN) = 15.0
+    # cost_ratio = 15.0 / 15.0 = 1.0
     assert report.cost_ratio == pytest.approx(1.0, abs=1e-6)
 
 
