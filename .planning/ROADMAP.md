@@ -184,11 +184,11 @@ Plans:
   3. Perception-reasoning gap metric is computed and displayed when both metadata-track and visual-track results exist in the same results file
   4. All 133 existing tests pass with zero modifications to `score_run()` — the function signature and behavior are unchanged
   5. Track-specific required field validation rejects a visual_only scenario missing `visual_data.uri` with an informative error
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 15-01: Add track partitioning to scorer dashboard and SequenceScoreReport dataclass with score_sequences() function
-- [ ] 15-02: Add perception-reasoning gap metric and track-aware validation; run full 133-test regression
+- [ ] 15-01-PLAN.md — SequenceScoreReport, score_sequences(), format_dashboard track partitioning
+- [ ] 15-02-PLAN.md — compute_perception_gap(), Phase 15 regression test suite
 
 ### Phase 16: CLI Extensions
 **Goal**: Users can invoke all three new generators from the CLI and compute the frame extraction baseline gap without any code changes
@@ -198,7 +198,7 @@ Plans:
   1. `psai-bench generate --track [visual_only|visual_contradictory|temporal] --help` shows valid options and exits 0
   2. `psai-bench score-sequences results.json` runs against a temporal results file and prints a SequenceScoreReport summary
   3. `psai-bench analyze-frame-gap metadata_results.json visual_results.json` computes and prints the perception-reasoning gap metric
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [ ] 16-01: Extend --track choices; add score-sequences and analyze-frame-gap CLI subcommands; add opencv-python-headless to [visual] optional group in pyproject.toml
@@ -211,7 +211,7 @@ Plans:
   1. `docs/EVALUATION_PROTOCOL.md` exists and defines GT derivation rules for all four tracks (metadata, visual_only, visual_contradictory, temporal) with worked examples
   2. The document specifies the frame extraction baseline procedure: uniform N-frame sampling, never using anomaly_segments for selection, deterministic given seed
   3. The document explains which scoring function applies to which track (score_run vs score_sequences) and how to interpret cross-track comparisons
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [ ] 17-01: Write docs/EVALUATION_PROTOCOL.md with GT definitions, scoring protocol, and frame extraction baseline specification
