@@ -150,3 +150,108 @@ class TestComputePerceptionGap:
         m = ScoreReport(aggregate_score=0.75, n_scenarios=100)
         with pytest.raises(ValueError, match="visual_report"):
             compute_perception_gap(m, ScoreReport(n_scenarios=0))
+
+    def test_gap_with_real_scored_reports(self):
+        """Generate 50 metadata + 50 visual_only scenarios, score each, compute gap."""
+        # Metadata scenarios
+        meta_gen = MetadataGenerator(seed=99)
+        meta_scenarios = meta_gen.generate_ucf_crime(n=50)
+        meta_outputs = [
+            _make_output(s["alert_id"], "BENIGN") for s in meta_scenarios
+        ]
+        meta_report = score_run(meta_scenarios, meta_outputs)
+
+        # Visual-only scenarios
+        visual_gen = VisualOnlyGenerator(seed=99)
+        visual_scenarios = visual_gen.generate(n=50)
+        visual_outputs = [
+            _make_output(s["alert_id"], "BENIGN") for s in visual_scenarios
+        ]
+        visual_report = score_run(visual_scenarios, visual_outputs)
+
+        gap = compute_perception_gap(meta_report, visual_report)
+        assert isinstance(gap, float)
+
+
+# ---------------------------------------------------------------------------
+# 2. TestScoreRunContractGuard
+# ---------------------------------------------------------------------------
+
+class TestScoreRunContractGuard:
+
+    def test_score_run_signature_unchanged(self):
+        """score_run() must have exactly ['scenarios', 'outputs'] parameters."""
+        sig = inspect.signature(score_run)
+        params = list(sig.parameters.keys())
+        assert params == ["scenarios", "outputs"], (
+            f"score_run signature changed — expected ['scenarios', 'outputs'], got {params}"
+        )
+
+    def test_score_run_returns_score_report(self):
+        """score_run([], []) must return a ScoreReport instance."""
+        result = score_run([], [])
+        assert isinstance(result, ScoreReport)
+
+    def test_score_run_empty_returns_zero_report(self):
+        """score_run([], []) returns ScoreReport with n_scenarios==0."""
+        result = score_run([], [])
+        assert result.n_scenarios == 0
+
+
+# ---------------------------------------------------------------------------
+# 3. TestTrackValidationBehavior (SCORE-04)
+# ---------------------------------------------------------------------------
+
+class TestTrackValidationBehavior:
+
+    def test_visual_only_missing_uri_is_error(self):
+        """visual_only scenario with visual_data.uri=None -> validation fails with visual_data.uri in error."""
+        scenario = _make_visual_only_scenario("vo-001", "BENIGN", has_uri=False)
+        report = validate_scenarios([scenario])
+        assert not report.passed
+        assert any("visual_data.uri" in e for e in report.errors), (
+            f"Expected 'visual_data.uri' in errors, got: {report.errors}"
+        )
+
+    def test_visual_contradictory_missing_contradictory_flag_is_error(self):
+        """visual_contradictory without _meta.contradictory -> validation fails."""
+        scenario = _make_visual_only_scenario("vc-001", "THREAT", has_uri=True)
+        scenario["track"] = "visual_contradictory"
+        # _meta.contradictory is NOT set (missing)
+        report = validate_scenarios([scenario])
+        assert not report.passed
+
+    def test_temporal_missing_sequence_id_is_error(self):
+        """temporal track without _meta.sequence_id -> validation fails."""
+        scenario = _make_scenario("t-001", "THREAT")
+        scenario["track"] = "temporal"
+        scenario["_meta"]["sequence_position"] = 1
+        # sequence_id deliberately omitted
+        report = validate_scenarios([scenario])
+        assert not report.passed
+
+    def test_valid_visual_only_passes(self):
+        """Well-formed visual_only scenario with uri set -> no track errors."""
+        scenario = _make_visual_only_scenario("vo-ok-001", "BENIGN", has_uri=True)
+        report = validate_scenarios([scenario])
+        # Should have no track-related errors (warnings about distribution are ok)
+        track_errors = [e for e in report.errors if "track" in e.lower() or "visual_data.uri" in e]
+        assert len(track_errors) == 0, f"Unexpected track errors: {track_errors}"
+
+
+# ---------------------------------------------------------------------------
+# 4. TestFullRegression133
+# ---------------------------------------------------------------------------
+
+class TestFullRegression133:
+
+    def test_all_core_tests_pass(self):
+        """Guard: all tests in test_core.py must pass with no modifications."""
+        result = subprocess.run(
+            ["python", "-m", "pytest", "tests/test_core.py", "-q", "--tb=short"],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, (
+            f"test_core.py regression failed:\n{result.stdout}\n{result.stderr}"
+        )
