@@ -111,7 +111,7 @@ Plans:
 - [x] **Phase 14: Temporal Sequences** - Build TemporalSequenceGenerator with escalation narrative patterns and sequence threading (completed 2026-04-13)
 - [x] **Phase 15: Scoring Updates** - Add track partitioning, score_sequences(), and perception-reasoning gap metric without modifying score_run() (completed 2026-04-13)
 - [x] **Phase 16: CLI Extensions** - Extend --track choices and add score-sequences, analyze-frame-gap subcommands (completed 2026-04-13)
-- [ ] **Phase 17: Evaluation Protocol** - Write docs/EVALUATION_PROTOCOL.md documenting GT definitions, scoring protocol, and frame extraction baseline
+- [x] **Phase 17: Evaluation Protocol** - Write docs/EVALUATION_PROTOCOL.md documenting GT definitions, scoring protocol, and frame extraction baseline (completed 2026-04-13)
 
 ## Phase Details
 
@@ -214,7 +214,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 17-01-PLAN.md — Write docs/EVALUATION_PROTOCOL.md with GT definitions, scoring protocol, and frame extraction baseline specification
+- [x] 17-01-PLAN.md — Write docs/EVALUATION_PROTOCOL.md with GT definitions, scoring protocol, and frame extraction baseline specification
 
 ## Progress
 
@@ -232,4 +232,4 @@ Plans:
 | 14. Temporal Sequences | v3.0 | 1/1 | Complete    | 2026-04-13 |
 | 15. Scoring Updates | v3.0 | 2/2 | Complete    | 2026-04-13 |
 | 16. CLI Extensions | v3.0 | 1/1 | Complete    | 2026-04-13 |
-| 17. Evaluation Protocol | v3.0 | 0/1 | Not started | - |
+| 17. Evaluation Protocol | v3.0 | 1/1 | Complete    | 2026-04-13 |
