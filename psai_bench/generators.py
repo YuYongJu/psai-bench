@@ -1201,3 +1201,151 @@ class MultiSensorGenerator:
                 s["_meta"]["difficulty"] = "medium"
 
         return base_scenarios
+
+
+class AdversarialV4Generator:
+    """Generate Adversarial V4 Track scenarios with behavioral deception patterns.
+
+    Three pattern types: loitering_as_waiting, authorized_as_intrusion,
+    environmental_as_human. In each pattern, the description text suggests the
+    wrong verdict; ground truth is computed from actual context signals via
+    assign_ground_truth_v2.
+
+    RNG isolation: owns its own np.random.RandomState to prevent seed regression
+    in existing tracks (Pitfall 10 from PITFALLS.md).
+    """
+
+    _PATTERN_TYPES = [
+        "loitering_as_waiting",
+        "authorized_as_intrusion",
+        "environmental_as_human",
+    ]
+
+    def __init__(self, seed: int = 42):
+        self.rng = np.random.RandomState(seed)
+        self.seed = seed
+
+    def generate(self, n: int = 100) -> list[dict]:
+        from psai_bench.distributions import (
+            ADV_V4_AUTHORIZED_AS_INTRUSION,
+            ADV_V4_ENVIRONMENTAL_AS_HUMAN,
+            ADV_V4_LOITERING_AS_WAITING,
+            EXPECTED_ACTIVITIES,
+            assign_ground_truth_v2,
+        )
+
+        # Assign pattern types in round-robin order then shuffle for variety
+        pattern_assignments = (self._PATTERN_TYPES * ((n // 3) + 1))[:n]
+        pattern_assignments = list(self.rng.permutation(pattern_assignments))
+
+        pool_map = {
+            "loitering_as_waiting": ADV_V4_LOITERING_AS_WAITING,
+            "authorized_as_intrusion": ADV_V4_AUTHORIZED_AS_INTRUSION,
+            "environmental_as_human": ADV_V4_ENVIRONMENTAL_AS_HUMAN,
+        }
+
+        scenarios = []
+        for i, pattern_type in enumerate(pattern_assignments):
+            description = self.rng.choice(pool_map[pattern_type])
+
+            if pattern_type == "loitering_as_waiting":
+                zone_type = self.rng.choice(["parking", "interior"])
+                zone_sensitivity = int(np.clip(self.rng.randint(1, 3), 1, 5))
+                time_of_day = "day"
+                severity = "LOW"
+                badge_minutes_ago = int(self.rng.randint(1, 9))
+                device_fpr = float(np.clip(self.rng.normal(0.60, 0.10), 0.01, 0.99))
+
+            elif pattern_type == "authorized_as_intrusion":
+                zone_type = "interior"
+                zone_sensitivity = int(np.clip(self.rng.randint(2, 4), 1, 5))
+                time_of_day = self.rng.choice(["day", "dusk"])
+                severity = self.rng.choice(["LOW", "MEDIUM"])
+                badge_minutes_ago = int(self.rng.randint(1, 8))
+                device_fpr = float(np.clip(self.rng.normal(0.55, 0.12), 0.01, 0.99))
+
+            else:  # environmental_as_human
+                zone_type = self.rng.choice(["perimeter", "parking"])
+                zone_sensitivity = int(np.clip(self.rng.randint(1, 3), 1, 5))
+                time_of_day = self.rng.choice(["day", "dawn"])
+                severity = "LOW"
+                badge_minutes_ago = None
+                device_fpr = float(np.clip(self.rng.normal(0.85, 0.08), 0.01, 0.99))
+
+            # Build zone dict directly (not via sample_zone — we control zone_type for GT)
+            zone_name_options = {
+                "perimeter": ["North Fence Line", "East Perimeter", "West Perimeter", "Main Gate"],
+                "interior": ["Control Room", "Equipment Hall", "Interior Corridor A"],
+                "parking": ["Main Parking Lot", "Staff Parking", "Visitor Parking"],
+            }
+            zone = {
+                "id": f"zone-{self.rng.randint(100, 999)}",
+                "name": self.rng.choice(zone_name_options.get(zone_type, ["Zone-A"])),
+                "type": zone_type,
+                "sensitivity": zone_sensitivity,
+                "operating_hours": "24/7",
+            }
+
+            device = sample_device(zone_type, self.rng)
+            device["false_positive_rate"] = round(device_fpr, 3)
+
+            weather = sample_weather(time_of_day, self.rng)
+            site_type = _sample_valid_site("Normal", self.rng)
+
+            gt, weighted_sum, is_ambiguous = assign_ground_truth_v2(
+                zone_type=zone_type,
+                zone_sensitivity=zone_sensitivity,
+                time_of_day=time_of_day,
+                device_fpr=device_fpr,
+                severity=severity,
+                badge_access_minutes_ago=badge_minutes_ago,
+                rng=self.rng,
+            )
+
+            badge_events = []
+            if badge_minutes_ago is not None:
+                badge_events = [{
+                    "minutes_ago": badge_minutes_ago,
+                    "event_type": "badge_granted",
+                    "resolved": True,
+                }]
+
+            alert = {
+                "alert_id": f"adv-v4-{i:05d}",
+                "timestamp": _generate_timestamp(time_of_day, self.rng),
+                "track": "adversarial_v4",
+                "severity": severity,
+                "description": description,
+                "source_type": "camera",
+                "zone": zone,
+                "device": device,
+                "context": {
+                    "recent_zone_events_1h": _generate_recent_events(
+                        zone_type, time_of_day, self.rng
+                    ),
+                    "recent_badge_access_1h": badge_events,
+                    "weather": weather,
+                    "time_of_day": time_of_day,
+                    "expected_activities": EXPECTED_ACTIVITIES.get(site_type, []),
+                    "cross_zone_activity": {},
+                    "site_type": site_type,
+                },
+                "visual_data": None,
+                "additional_sensors": [],
+                "_meta": {
+                    "ground_truth": gt,
+                    "weighted_sum": weighted_sum,
+                    "difficulty": "hard",  # all adversarial scenarios are hard
+                    "source_dataset": "adv_v4_behavioral",
+                    "source_category": "Normal",
+                    "seed": self.seed,
+                    "index": i,
+                    "adversarial": True,
+                    "adversarial_type": pattern_type,
+                    "ambiguity_flag": is_ambiguous,
+                    "generation_version": "v4",
+                },
+            }
+            scenarios.append(alert)
+
+        return scenarios
