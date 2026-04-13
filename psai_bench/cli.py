@@ -500,5 +500,92 @@ def analyze_gap(results_dir: str, scenarios: str, output: str):
     click.echo(f"\nAnalysis saved to {out_path}")
 
 
+@main.command()
+@click.option("--scenarios", type=click.Path(exists=True), required=True,
+              help="Temporal scenario file (output of generate --track temporal).")
+@click.option("--outputs", type=click.Path(exists=True), required=True,
+              help="System outputs file (alert_id -> verdict).")
+@click.option("--format", "fmt", type=click.Choice(["table", "json"]), default="table")
+def score_sequences_cmd(scenarios: str, outputs: str, fmt: str):
+    """Score temporal sequence evaluation (escalation latency, detection rates)."""
+    from psai_bench.scorer import score_sequences
+
+    with open(scenarios) as f:
+        scenario_data = json.load(f)
+    with open(outputs) as f:
+        output_data = json.load(f)
+
+    report = score_sequences(scenario_data, output_data)
+
+    if fmt == "json":
+        click.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        click.echo("=== Sequence Score Report ===")
+        click.echo(f"  Sequences:              {report.n_sequences}")
+        click.echo(f"  Threat sequences:       {report.n_threat_sequences}")
+        click.echo(f"  Benign sequences:       {report.n_benign_sequences}")
+        click.echo(f"  Early detection rate:   {report.early_detection_rate:.4f}")
+        click.echo(f"  Late detection rate:    {report.late_detection_rate:.4f}")
+        click.echo(f"  Missed sequence rate:   {report.missed_sequence_rate:.4f}")
+        click.echo(f"  False escalation rate:  {report.false_escalation_rate:.4f}")
+
+
+@main.command()
+@click.option("--metadata-results", type=click.Path(exists=True), required=True,
+              help="System outputs scored against metadata-track scenarios.")
+@click.option("--visual-results", type=click.Path(exists=True), required=True,
+              help="System outputs scored against visual-track scenarios.")
+@click.option("--metadata-scenarios", type=click.Path(exists=True), required=True,
+              help="Metadata-track scenario file (for scoring).")
+@click.option("--visual-scenarios", type=click.Path(exists=True), required=True,
+              help="Visual-track scenario file (for scoring).")
+def analyze_frame_gap(
+    metadata_results: str,
+    visual_results: str,
+    metadata_scenarios: str,
+    visual_scenarios: str,
+):
+    """Compute perception-reasoning gap between metadata and visual track performance.
+
+    Loads each results file, scores it with score_run(), then calls
+    compute_perception_gap() on the two ScoreReports.
+
+    Note: This is separate from 'analyze-gap', which does multi-model gap analysis
+    from a results directory using the old track structure.
+    """
+    from psai_bench.scorer import compute_perception_gap, score_run
+
+    with open(metadata_scenarios) as f:
+        meta_scenarios = json.load(f)
+    with open(metadata_results) as f:
+        meta_outputs = json.load(f)
+
+    with open(visual_scenarios) as f:
+        vis_scenarios = json.load(f)
+    with open(visual_results) as f:
+        vis_outputs = json.load(f)
+
+    meta_report = score_run(meta_scenarios, meta_outputs)
+    visual_report = score_run(vis_scenarios, vis_outputs)
+
+    try:
+        gap = compute_perception_gap(meta_report, visual_report)
+    except ValueError as e:
+        raise click.ClickException(str(e)) from e
+
+    sign = "+" if gap >= 0 else ""
+    click.echo("=== Perception-Reasoning Gap Analysis ===")
+    click.echo(f"  Metadata aggregate score: {meta_report.aggregate_score:.4f}  (N={meta_report.n_scenarios})")
+    click.echo(f"  Visual aggregate score:   {visual_report.aggregate_score:.4f}  (N={visual_report.n_scenarios})")
+    click.echo(f"  Gap (metadata - visual):  {sign}{gap:.4f}")
+    click.echo("")
+    if abs(gap) < 0.02:
+        click.echo("  Interpretation: Video adds negligible value (<2% gap).")
+    elif gap > 0:
+        click.echo(f"  Interpretation: Metadata context boosts aggregate by {gap:.1%} — video perception alone is insufficient.")
+    else:
+        click.echo(f"  Interpretation: Visual track outperforms metadata by {abs(gap):.1%}.")
+
+
 if __name__ == "__main__":
     main()
