@@ -105,7 +105,7 @@ Plans:
 
 **Milestone Goal:** Add visual-only, contradictory, and temporal scenario tracks plus a perception-reasoning gap metric — making the benchmark genuinely publishable as a multi-modal evaluation tool.
 
-- [ ] **Phase 11: Schema v3** - Extend schema with new tracks, relax required fields for visual tracks, add _meta v3 fields, pin seed-42 regression hash
+- [x] **Phase 11: Schema v3** - Extend schema with new tracks, relax required fields for visual tracks, add _meta v3 fields, pin seed-42 regression hash (completed 2026-04-13)
 - [ ] **Phase 12: Visual-Only Scenarios** - Build VisualOnlyGenerator with UCF Crime-based GT derivation and leakage-safe field population
 - [ ] **Phase 13: Contradictory Scenarios** - Build ContradictoryGenerator with video-derived GT, dual GT storage, and contradictory description pools
 - [ ] **Phase 14: Temporal Sequences** - Build TemporalSequenceGenerator with escalation narrative patterns and sequence threading
@@ -128,8 +128,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 11-01-PLAN.md — Pin seed-42 regression hash (tests/test_seed_regression.py)
-- [ ] 11-02-PLAN.md — Extend schema track enum, relax required, add _meta v3 fields, track-aware validation
+- [x] 11-01-PLAN.md — Pin seed-42 regression hash (tests/test_seed_regression.py)
+- [x] 11-02-PLAN.md — Extend schema track enum, relax required, add _meta v3 fields, track-aware validation
 
 ### Phase 12: Visual-Only Scenarios
 **Goal**: Users can generate visual-only scenarios where ground truth is derived from video content labels, not metadata signals, and existing leakage tests pass on the visual-only subset
@@ -226,7 +226,7 @@ Plans:
 | 4. GitHub Actions CI | v1.0 | 3/3 | Complete | 2026-04-13 |
 | 5. Documentation + Release | v1.0 | 3/3 | Complete | 2026-04-13 |
 | 6-10. v2.0 Foundation | v2.0 | 9/9 | Complete | 2026-04-13 |
-| 11. Schema v3 | v3.0 | 0/2 | Not started | - |
+| 11. Schema v3 | v3.0 | 2/2 | Complete    | 2026-04-13 |
 | 12. Visual-Only Scenarios | v3.0 | 0/1 | Not started | - |
 | 13. Contradictory Scenarios | v3.0 | 0/2 | Not started | - |
 | 14. Temporal Sequences | v3.0 | 0/1 | Not started | - |
