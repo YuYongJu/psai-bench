@@ -338,6 +338,49 @@ DESCRIPTION_POOL_UNAMBIGUOUS_BENIGN = [
 ]
 
 # ---------------------------------------------------------------------------
+# Contradictory scenario description pools (v3)
+# ---------------------------------------------------------------------------
+# CONTRADICTORY_THREAT_DESCRIPTIONS — used for OVERREACH scenarios where metadata
+# signals suggest THREAT but video content is actually BENIGN (Normal UCF category).
+# Each entry is plausible enough that a metadata-only system would call THREAT,
+# but the video would show nothing anomalous. No entry contains "benign", "normal",
+# "routine", or "authorized" — words that would undermine the deceptive framing.
+CONTRADICTORY_THREAT_DESCRIPTIONS = [
+    "Perimeter breach indicator: fence disturbance sensor triggered, zone-north, 02:18",
+    "Badge denial pattern: seven rejections at service gate over 40-minute window, no escort logged",
+    "High-severity analytics alert: loitering behavior confirmed by two camera angles, restricted zone",
+    "Thermal anomaly in equipment yard: elevated temperature +12F above baseline, source unlocated",
+    "Motion pattern consistent with reconnaissance: systematic movement along perimeter, 23:50",
+    "Forced entry indicators at control cabinet: physical contact sensor triggered, no badge scan",
+    "Two individuals moving in coordinated pattern toward utility corridor, 01:05 AM",
+    "Camera analytics: fence-climb motion class detected, east perimeter, confidence 0.87",
+    "Vibration sensor activation at gate latch: contact duration 8 seconds, no badge event logged",
+    "Zone-restricted access attempt: proximity sensor triggered from external side of barrier",
+    "Night-time thermal signature near panel array: stationary heat source, unscheduled location",
+    "Analytics engine: slow perimeter approach pattern detected, north fence line, 03:41",
+]
+
+# CONTRADICTORY_BENIGN_DESCRIPTIONS — used for UNDERREACH scenarios where metadata
+# signals suggest BENIGN but video content is actually THREAT (an anomaly UCF category).
+# Each entry is plausible enough that a metadata-only system would call BENIGN or SUSPICIOUS,
+# but the video would show an actual threat event. No entry contains "breach", "intrusion",
+# "forced", "attack", or "weapon" — words that would undermine the benign framing.
+CONTRADICTORY_BENIGN_DESCRIPTIONS = [
+    "Routine motion trigger: environmental cause probable, sensor auto-reset, 14:30",
+    "Scheduled maintenance window: crew access expected, badge granted 4 min prior",
+    "Low-confidence analytics trigger: motion detected, classification inconclusive 0.42",
+    "Periodic equipment self-test: no scene content detected, internal diagnostic cycle",
+    "Weather-correlated trigger: wind gust 18 mph, vegetation motion, no human visible",
+    "Camera adjustment motion: PTZ repositioning triggered sensor, expected behavior",
+    "Background motion: bird or small animal class, sub-threshold heat signature",
+    "Daytime motion event: shift change window, personnel movement consistent with schedule",
+    "Analytics confidence below threshold: motion class unresolved, flagged for review only",
+    "Sensor reset after power cycle: transient event, no persistent motion detected in scene",
+    "Zone-3 periodic activity: expected foot traffic pattern, no anomaly in movement profile",
+    "Low-priority analytics event: similarity score 0.38 to known-benign event library",
+]
+
+# ---------------------------------------------------------------------------
 # V2 Ground Truth Decision Function
 # ---------------------------------------------------------------------------
 # GT determined by weighted combination of context signals, not by category alone.
