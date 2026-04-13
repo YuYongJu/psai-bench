@@ -106,12 +106,12 @@ ALERT_SCHEMA = {
 
 OUTPUT_SCHEMA = {
     "type": "object",
-    "required": ["alert_id", "verdict", "confidence", "reasoning", "processing_time_ms"],
+    "required": ["alert_id", "verdict", "confidence"],
     "properties": {
         "alert_id": {"type": "string"},
         "verdict": {"type": "string", "enum": ["THREAT", "SUSPICIOUS", "BENIGN"]},
-        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        "reasoning": {"type": "string", "minLength": 20},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1, "description": "probability that the verdict is correct"},
+        "reasoning": {"type": "string"},
         "factors_considered": {"type": "array", "items": {"type": "string"}},
         "processing_time_ms": {"type": "integer", "minimum": 0},
         "model_info": {
