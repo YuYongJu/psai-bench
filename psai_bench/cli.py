@@ -99,56 +99,8 @@ def score(scenarios: str, outputs: str, fmt: str):
     if fmt == "json":
         click.echo(json.dumps(report.to_dict(), indent=2))
     else:
-        _print_report_table(report)
-
-
-def _print_report_table(report):
-    """Pretty-print a score report."""
-    from tabulate import tabulate
-
-    primary = [
-        ["Threat Detection Rate (TDR)", f"{report.tdr:.4f}"],
-        ["False Alarm Suppression (FASR)", f"{report.fasr:.4f}"],
-        ["3-Class Accuracy", f"{report.accuracy:.4f}"],
-        ["Safety Score (1:1)", f"{report.safety_score_1_1:.4f}"],
-        ["Safety Score (3:1)", f"{report.safety_score_3_1:.4f}"],
-        ["Safety Score (10:1)", f"{report.safety_score_10_1:.4f}"],
-    ]
-    click.echo("\n=== Primary Metrics ===")
-    click.echo(tabulate(primary, headers=["Metric", "Value"], tablefmt="simple"))
-
-    calibration = [
-        ["ECE", f"{report.ece:.4f}"],
-        ["Brier Score", f"{report.brier_score:.4f}"],
-        ["Overconfidence Rate", f"{report.overconfidence_rate:.4f}"],
-    ]
-    click.echo("\n=== Calibration ===")
-    click.echo(tabulate(calibration, headers=["Metric", "Value"], tablefmt="simple"))
-
-    secondary = [
-        ["SUSPICIOUS Fraction", f"{report.suspicious_fraction:.4f}"],
-        ["SUSPICIOUS Penalty", f"{report.suspicious_penalty:.4f}"],
-        ["Calibration Factor", f"{report.calibration_factor:.4f}"],
-        ["Aggregate Score", f"{report.aggregate_score:.4f}"],
-    ]
-    click.echo("\n=== Aggregate ===")
-    click.echo(tabulate(secondary, headers=["Metric", "Value"], tablefmt="simple"))
-
-    difficulty = [
-        ["Easy", f"{report.accuracy_easy:.4f}", f"{report.safety_score_easy:.4f}"],
-        ["Medium", f"{report.accuracy_medium:.4f}", f"{report.safety_score_medium:.4f}"],
-        ["Hard", f"{report.accuracy_hard:.4f}", f"{report.safety_score_hard:.4f}"],
-    ]
-    click.echo("\n=== Per-Difficulty ===")
-    click.echo(tabulate(difficulty, headers=["Difficulty", "Accuracy", "Safety Score"], tablefmt="simple"))
-
-    if report.per_dataset_accuracy:
-        ds = [[k, f"{v:.4f}"] for k, v in report.per_dataset_accuracy.items()]
-        ds.append(["Generalization Gap", f"{report.generalization_gap:.4f}"])
-        click.echo("\n=== Cross-Dataset ===")
-        click.echo(tabulate(ds, headers=["Dataset", "Accuracy"], tablefmt="simple"))
-
-    click.echo(f"\nN={report.n_scenarios} (Threats={report.n_threats}, Benign={report.n_benign})")
+        from psai_bench.scorer import format_dashboard
+        click.echo(format_dashboard(report))
 
 
 @main.command()
@@ -187,79 +139,16 @@ def baselines(scenarios: str, output: str):
         with open(out_file, "w") as f:
             json.dump(outputs, f, indent=2)
 
+        from psai_bench.scorer import format_dashboard
         click.echo(f"\n{'='*60}")
         click.echo(f"  {name.upper()} BASELINE")
         click.echo(f"{'='*60}")
-        _print_report_table(report)
+        click.echo(format_dashboard(report))
 
     # Save summary
     with open(out_dir / "baseline_summary.json", "w") as f:
         json.dump(results, f, indent=2)
     click.echo(f"\nAll baseline results saved to {out_dir}/")
-
-
-@main.command()
-@click.option("--scenarios", type=click.Path(exists=True), required=True)
-@click.option("--output", type=click.Path(), default="results/suspicious_analysis.json")
-def analyze_suspicious_cap(scenarios: str, output: str):
-    """Run sensitivity analysis on the SUSPICIOUS cap threshold.
-
-    Simulates system behavior at different SUSPICIOUS usage rates
-    to empirically justify the 30% cap. Produces data for Section 4.5.
-    """
-    from psai_bench.scorer import score_run
-
-    with open(scenarios) as f:
-        scenario_data = json.load(f)
-
-    rng = np.random.RandomState(42)
-    thresholds = [0.0, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.80, 1.0]
-    results = []
-
-    for target_susp_rate in thresholds:
-        # Simulate a system that uses SUSPICIOUS at the target rate
-        outputs = []
-        for s in scenario_data:
-            gt = s["_meta"]["ground_truth"]
-            if rng.random() < target_susp_rate:
-                verdict = "SUSPICIOUS"
-            else:
-                # When not saying SUSPICIOUS, be 75% accurate on remaining predictions
-                if rng.random() < 0.75:
-                    verdict = gt
-                else:
-                    others = [v for v in ["THREAT", "SUSPICIOUS", "BENIGN"] if v != gt]
-                    verdict = rng.choice(others)
-            outputs.append({
-                "alert_id": s["alert_id"],
-                "verdict": verdict,
-                "confidence": round(float(rng.uniform(0.4, 0.9)), 2),
-                "reasoning": "Simulated system for SUSPICIOUS cap analysis.",
-                "processing_time_ms": 100,
-            })
-
-        report = score_run(scenario_data, outputs)
-        results.append({
-            "target_suspicious_rate": target_susp_rate,
-            "actual_suspicious_fraction": report.suspicious_fraction,
-            "accuracy": report.accuracy,
-            "tdr": report.tdr,
-            "fasr": report.fasr,
-            "safety_score_3_1": report.safety_score_3_1,
-            "suspicious_penalty": report.suspicious_penalty,
-            "aggregate_score": report.aggregate_score,
-        })
-        click.echo(
-            f"SUSP={target_susp_rate:.0%}: "
-            f"Acc={report.accuracy:.3f} TDR={report.tdr:.3f} "
-            f"SS={report.safety_score_3_1:.3f} Agg={report.aggregate_score:.3f}"
-        )
-
-    out_path = Path(output)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w") as f:
-        json.dump(results, f, indent=2)
-    click.echo(f"\nSaved to {out_path}")
 
 
 @main.command()
