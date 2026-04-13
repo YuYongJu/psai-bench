@@ -1,6 +1,6 @@
 [project]
 name = "psai-bench"
-version = "1.0.0rc1"
+version = "1.0.0"
 description = "PSAI-Bench: Physical Security AI Triage Benchmark — evaluates whether frontier AI models actually benefit from video in physical security triage"
 readme = "README.md"
 license = "Apache-2.0"
