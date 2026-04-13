@@ -401,7 +401,7 @@ def assign_ground_truth_v2(
     fpr_score = _device_fpr_score(device_fpr)
     severity_score = _SEVERITY_THREAT_SCORES.get(severity, 0.0)
 
-    if badge_access_minutes_ago is not None and badge_access_minutes_ago <= 10:
+    if badge_access_minutes_ago is not None and badge_access_minutes_ago < 10:
         badge_score = -0.45
     elif badge_access_minutes_ago is not None and badge_access_minutes_ago <= 30:
         badge_score = -0.25

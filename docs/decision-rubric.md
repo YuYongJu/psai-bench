@@ -23,10 +23,10 @@ The five signals are:
 | # | Signal | Source field |
 |---|--------|-------------|
 | 1 | Zone type & sensitivity | `alert.zone.type`, `alert.zone.sensitivity` |
-| 2 | Time of day | `alert.time_of_day` |
+| 2 | Time of day | `alert.context.time_of_day` |
 | 3 | Device false positive rate | `alert.device.false_positive_rate` |
 | 4 | Alert severity | `alert.severity` |
-| 5 | Badge access recency | `alert.context.badge_access_minutes_ago` |
+| 5 | Badge access recency | `alert.context.recent_badge_access_1h[*].minutes_ago` (or null if array empty) |
 
 ---
 
@@ -141,8 +141,8 @@ Reference values:
 
 | Condition                                       | Score |
 |-------------------------------------------------|-------|
-| Badge scan ≤ 10 minutes ago                    | -0.45 |
-| Badge scan > 10 and ≤ 30 minutes ago           | -0.25 |
+| Badge scan < 10 minutes ago                     | -0.45 |
+| Badge scan ≥ 10 and ≤ 30 minutes ago            | -0.25 |
 | No badge data (`badge_access_minutes_ago = null`) |  0.00 |
 
 Badge provides only benign evidence. Its absence contributes nothing.
@@ -188,8 +188,8 @@ Then:
 | FPR: 0.50 | — | -0.072 |
 | FPR: 0.85 | — | -0.228 |
 | FPR: 0.90 | — | -0.250 |
-| Badge ≤ 10 min | — | -0.450 |
-| Badge 11–30 min | — | -0.250 |
+| Badge < 10 min | — | -0.450 |
+| Badge 10–30 min | — | -0.250 |
 | No badge | — | 0.000 |
 
 ---
@@ -391,10 +391,10 @@ description wording will produce systematically wrong labels.
 To compute the GT label for any scenario by hand:
 
 1. Read `zone.type` and `zone.sensitivity` → compute zone_score
-2. Read `time_of_day` → look up time_score
+2. Read `context.time_of_day` → look up time_score
 3. Read `device.false_positive_rate` → apply FPR formula
 4. Read `severity` → look up severity_score
-5. Read `context.badge_access_minutes_ago` (may be null) → apply badge rule
+5. Read `context.recent_badge_access_1h` array → if non-empty, use first entry's `minutes_ago`; if empty, treat as null → apply badge rule
 6. Sum all five scores, round to 4 decimal places
 7. Compare to ±0.30 and ±0.10 thresholds
 
