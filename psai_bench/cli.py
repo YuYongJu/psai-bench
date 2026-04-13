@@ -23,7 +23,14 @@ def main():
 
 
 @main.command()
-@click.option("--track", type=click.Choice(["metadata", "visual", "multi_sensor"]), required=True)
+@click.option(
+    "--track",
+    type=click.Choice([
+        "metadata", "visual", "multi_sensor",
+        "visual_only", "visual_contradictory", "temporal",
+    ]),
+    required=True,
+)
 @click.option("--source", type=click.Choice(["ucf", "caltech", "all"]), default="all")
 @click.option("--n", type=int, default=None, help="Number of scenarios (default: spec-defined)")
 @click.option("--seed", type=int, default=42)
@@ -66,6 +73,22 @@ def generate(track: str, source: str, n: int | None, seed: int, output: str, gen
         count = n or 1000
         scenarios = gen.generate(count)
         click.echo(f"Generated {count} multi-sensor scenarios")
+
+    elif track == "visual_only":
+        raise click.UsageError(
+            "visual_only track generator is not yet implemented (ships in Phase 12). "
+            "Use --track metadata or --track visual for now."
+        )
+    elif track == "visual_contradictory":
+        raise click.UsageError(
+            "visual_contradictory track generator is not yet implemented (ships in Phase 13). "
+            "Use --track metadata or --track visual for now."
+        )
+    elif track == "temporal":
+        raise click.UsageError(
+            "temporal track generator is not yet implemented (ships in Phase 14). "
+            "Use --track metadata or --track visual for now."
+        )
 
     version_suffix = f"_{gen_version}" if gen_version != "v1" else ""
     out_file = out_dir / f"{track}_{source}_seed{seed}{version_suffix}.json"

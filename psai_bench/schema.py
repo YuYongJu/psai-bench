@@ -10,13 +10,19 @@ from jsonschema import validate
 ALERT_SCHEMA = {
     "type": "object",
     "required": [
-        "alert_id", "timestamp", "track", "severity", "description",
+        "alert_id", "timestamp", "track",
         "source_type", "zone", "device", "context",
     ],
     "properties": {
         "alert_id": {"type": "string"},
         "timestamp": {"type": "string", "format": "date-time"},
-        "track": {"type": "string", "enum": ["visual", "metadata", "multi_sensor"]},
+        "track": {
+            "type": "string",
+            "enum": [
+                "visual", "metadata", "multi_sensor",       # existing v2 tracks
+                "visual_only", "visual_contradictory", "temporal",  # v3 new tracks
+            ],
+        },
         "severity": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
         "description": {"type": "string", "minLength": 10},
         "source_type": {
@@ -83,6 +89,11 @@ ALERT_SCHEMA = {
                 "uri": {"type": ["string", "null"]},
                 "duration_sec": {"type": ["number", "null"]},
                 "resolution": {"type": ["string", "null"]},
+                "keyframe_uris": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "URIs of extracted keyframes for frame-extraction baseline",
+                },
             },
         },
         "additional_sensors": {
@@ -140,11 +151,33 @@ _META_SCHEMA_V2 = {
         "source_category": {"type": "string"},
         "seed": {"type": "integer"},
         "index": {"type": "integer"},
-        "generation_version": {"type": "string"},
+        "generation_version": {"type": "string", "enum": ["v1", "v2", "v3"]},
         "weighted_sum": {"type": "number"},
         "adversarial": {"type": "boolean"},
         "ambiguity_flag": {"type": "boolean"},
         "description_category": {"type": "string"},
+        # v3 fields (all optional)
+        "visual_gt_source": {
+            "type": "string",
+            "enum": ["video_category", "metadata_signals"],
+            "description": "Whether GT was derived from video content or metadata signal weighting",
+        },
+        "contradictory": {
+            "type": "boolean",
+            "description": "True if scenario metadata intentionally misrepresents video content",
+        },
+        "sequence_id": {
+            "type": ["string", "null"],
+            "description": "Group identifier for temporal sequences; null for independent alerts",
+        },
+        "sequence_position": {
+            "type": ["integer", "null"],
+            "description": "1-indexed position within sequence; null for independent alerts",
+        },
+        "sequence_length": {
+            "type": ["integer", "null"],
+            "description": "Total alerts in this sequence; null for independent alerts",
+        },
     },
     "required": ["ground_truth", "difficulty", "source_dataset", "source_category", "seed", "index"],
 }

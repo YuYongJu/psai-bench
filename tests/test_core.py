@@ -105,9 +105,11 @@ class TestSchemaValidation:
         validate_alert(scenario)  # should not raise
 
     def test_missing_required_field_fails(self):
+        # severity is no longer required (v3: optional for visual tracks).
+        # zone remains required for all tracks — test that instead.
         gen = MetadataGenerator(seed=99)
         scenario = gen.generate_ucf_crime(n=1)[0]
-        del scenario["severity"]
+        del scenario["zone"]
         with pytest.raises(ValidationError):
             validate_alert(scenario)
 
