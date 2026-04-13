@@ -287,6 +287,189 @@ UCF_CATEGORY_MAP = {
 }
 
 # ---------------------------------------------------------------------------
+# Shared description pools (v2) — decoupled from UCF categories
+# ---------------------------------------------------------------------------
+# AMBIGUOUS: same description can appear across THREAT, SUSPICIOUS, or BENIGN GT
+# depending on context (zone, time, device FPR, badge access). ~63% of v2 descriptions.
+DESCRIPTION_POOL_AMBIGUOUS = [
+    "Motion detected, human-shaped silhouette, zone-perimeter, 02:14",
+    "Person observed near access point, no badge event in prior 30 min",
+    "Individual moving along fence line, gait analysis inconclusive",
+    "Vehicle stopped outside facility, engine running, no appointment on file",
+    "Two persons detected in utility corridor, unscheduled access",
+    "Human presence detected at remote site, no recent badge grant",
+    "Motion near high-voltage equipment, identity unverified",
+    "Person loitering near entry point, 18 min stationary",
+    "Unscheduled vehicle approaching perimeter gate, slow speed",
+    "Individual carrying equipment toward exit, badge scan 4 min ago",
+    "Person crouching near panel array section, tool visible",
+    "Motion detected in restricted zone, personnel roster not updated",
+    "Camera analytics: unusual gait pattern detected, zone-3, 23:47",
+    "Multiple persons congregating near service gate, partial obstruction",
+    "Person detected on perimeter road, no escort logged, 01:05",
+    "Individual accessing storage area, authorization status unconfirmed",
+    "Vehicle traversing access road outside posted hours",
+    "Person detected near fuel storage area, no hot work permit active",
+    "Camera trigger: human-class object, zone-interior, low confidence 0.62",
+    "Motion detected in equipment hall, shift schedule shows no activity expected",
+    "Person near cooling system, carrying bag, movement purposeful",
+    "Thermal signature detected near battery storage, source unconfirmed",
+]
+
+# UNAMBIGUOUS THREAT: always indicate high threat signal regardless of context (~23% of pool).
+DESCRIPTION_POOL_UNAMBIGUOUS_THREAT = [
+    "Visible flames detected in panel array, fire suppression not triggered",
+    "Person cutting perimeter fence with visible tool, 03:22",
+    "Gunshot-like audio event detected, multiple sensor confirmations",
+    "Forced entry at control cabinet door, physical damage visible",
+    "Smoke rising from transformer yard, thermal spike +40F above baseline",
+    "Perimeter breach: fence displacement confirmed by vibration sensor",
+    "Explosive-like event detected: sudden pressure and light burst",
+    "Camera analytics: assault-class motion between two persons detected",
+]
+
+# UNAMBIGUOUS BENIGN: always indicate low threat signal regardless of context (~14% of pool).
+DESCRIPTION_POOL_UNAMBIGUOUS_BENIGN = [
+    "Environmental trigger: wind gust 22 mph causing vegetation motion",
+    "Camera false activation: spider web on lens, no motion in scene",
+    "Small animal (rabbit-class) crossing sensor field, no human present",
+    "Scheduled maintenance crew confirmed via badge: 3 personnel authorized",
+    "Camera self-test trigger, no scene content, internal diagnostic",
+]
+
+# ---------------------------------------------------------------------------
+# Contradictory scenario description pools (v3)
+# ---------------------------------------------------------------------------
+# CONTRADICTORY_THREAT_DESCRIPTIONS — used for OVERREACH scenarios where metadata
+# signals suggest THREAT but video content is actually BENIGN (Normal UCF category).
+# Each entry is plausible enough that a metadata-only system would call THREAT,
+# but the video would show nothing anomalous. No entry contains "benign", "normal",
+# "routine", or "authorized" — words that would undermine the deceptive framing.
+CONTRADICTORY_THREAT_DESCRIPTIONS = [
+    "Perimeter breach indicator: fence disturbance sensor triggered, zone-north, 02:18",
+    "Badge denial pattern: seven rejections at service gate over 40-minute window, no escort logged",
+    "High-severity analytics alert: loitering behavior confirmed by two camera angles, restricted zone",
+    "Thermal anomaly in equipment yard: elevated temperature +12F above baseline, source unlocated",
+    "Motion pattern consistent with reconnaissance: systematic movement along perimeter, 23:50",
+    "Forced entry indicators at control cabinet: physical contact sensor triggered, no badge scan",
+    "Two individuals moving in coordinated pattern toward utility corridor, 01:05 AM",
+    "Camera analytics: fence-climb motion class detected, east perimeter, confidence 0.87",
+    "Vibration sensor activation at gate latch: contact duration 8 seconds, no badge event logged",
+    "Zone-restricted access attempt: proximity sensor triggered from external side of barrier",
+    "Night-time thermal signature near panel array: stationary heat source, unscheduled location",
+    "Analytics engine: slow perimeter approach pattern detected, north fence line, 03:41",
+]
+
+# CONTRADICTORY_BENIGN_DESCRIPTIONS — used for UNDERREACH scenarios where metadata
+# signals suggest BENIGN but video content is actually THREAT (an anomaly UCF category).
+# Each entry is plausible enough that a metadata-only system would call BENIGN or SUSPICIOUS,
+# but the video would show an actual threat event. No entry contains "breach", "intrusion",
+# "forced", "attack", or "weapon" — words that would undermine the benign framing.
+CONTRADICTORY_BENIGN_DESCRIPTIONS = [
+    "Routine motion trigger: environmental cause probable, sensor auto-reset, 14:30",
+    "Scheduled maintenance window: crew access expected, badge granted 4 min prior",
+    "Low-confidence analytics trigger: motion detected, classification inconclusive 0.42",
+    "Periodic equipment self-test: no scene content detected, internal diagnostic cycle",
+    "Weather-correlated trigger: wind gust 18 mph, vegetation motion, no human visible",
+    "Camera adjustment motion: PTZ repositioning triggered sensor, expected behavior",
+    "Background motion: bird or small animal class, sub-threshold heat signature",
+    "Daytime motion event: shift change window, personnel movement consistent with schedule",
+    "Analytics confidence below threshold: motion class unresolved, flagged for review only",
+    "Sensor reset after power cycle: transient event, no persistent motion detected in scene",
+    "Zone-3 periodic activity: expected foot traffic pattern, no anomaly in movement profile",
+    "Low-priority analytics event: similarity score 0.38 to known-benign event library",
+]
+
+# ---------------------------------------------------------------------------
+# V2 Ground Truth Decision Function
+# ---------------------------------------------------------------------------
+# GT determined by weighted combination of context signals, not by category alone.
+# Signal scoring: each signal contributes to a weighted_sum in [-1.25, +1.25].
+# Negative = BENIGN evidence, Positive = THREAT evidence.
+# GT thresholds: sum > +0.30 → THREAT, sum < -0.30 → BENIGN, else → SUSPICIOUS
+#
+# SCEN-03 compliance: severity max score = 0.25 < threshold 0.30.
+# Severity alone can never cross the threshold.
+
+_GT_THRESHOLD = 0.30
+_AMBIGUITY_THRESHOLD = 0.10  # |sum| < this → "ambiguous by design"
+
+_ZONE_THREAT_SCORES = {
+    "restricted": +0.40,
+    "utility": +0.25,
+    "perimeter": +0.10,
+    "interior": 0.00,
+    "parking": -0.15,
+}
+
+_TIME_THREAT_SCORES = {
+    "night": +0.35,
+    "dawn": +0.15,
+    "dusk": +0.10,
+    "day": -0.20,
+}
+
+_SEVERITY_THREAT_SCORES = {
+    "CRITICAL": +0.25,
+    "HIGH": +0.15,
+    "MEDIUM": 0.00,
+    "LOW": -0.20,
+}
+
+
+def _device_fpr_score(fpr: float) -> float:
+    """Map device FPR to threat score. Linear: FPR=0.05 → +0.13, FPR=0.95 → -0.27."""
+    return round(0.15 - (fpr * (0.40 / 0.90)), 3)
+
+
+def assign_ground_truth_v2(
+    zone_type: str,
+    zone_sensitivity: int,
+    time_of_day: str,
+    device_fpr: float,
+    severity: str,
+    badge_access_minutes_ago: int | None,
+    rng: "np.random.RandomState",
+) -> tuple[str, float, bool]:
+    """Assign ground truth using a weighted multi-signal scoring function.
+
+    Returns:
+        tuple: (ground_truth label, weighted_sum, is_ambiguous)
+    """
+    zone_base = _ZONE_THREAT_SCORES.get(zone_type, 0.0)
+    sensitivity_factor = 0.6 + (zone_sensitivity - 1) * 0.2
+    zone_score = zone_base * sensitivity_factor
+
+    time_score = _TIME_THREAT_SCORES.get(time_of_day, 0.0)
+    fpr_score = _device_fpr_score(device_fpr)
+    severity_score = _SEVERITY_THREAT_SCORES.get(severity, 0.0)
+
+    if badge_access_minutes_ago is not None and badge_access_minutes_ago < 10:
+        badge_score = -0.45
+    elif badge_access_minutes_ago is not None and badge_access_minutes_ago <= 30:
+        badge_score = -0.25
+    else:
+        badge_score = 0.0
+
+    weighted_sum = zone_score + time_score + fpr_score + severity_score + badge_score
+    weighted_sum = round(weighted_sum, 4)
+
+    is_ambiguous = abs(weighted_sum) < _AMBIGUITY_THRESHOLD
+
+    if weighted_sum > _GT_THRESHOLD:
+        gt = "THREAT"
+    elif weighted_sum < -_GT_THRESHOLD:
+        gt = "BENIGN"
+    else:
+        gt = "SUSPICIOUS"
+
+    return gt, weighted_sum, is_ambiguous
+
+
+# All severity levels — used for severity_noise injection.
+ALL_SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+
+# ---------------------------------------------------------------------------
 # Caltech Camera Traps → alert mapping
 # ---------------------------------------------------------------------------
 # Camera trap triggers are overwhelmingly false alarms (70% empty).
@@ -376,6 +559,53 @@ ACCESS_EVENTS = {
     "door_held_open": {"ground_truth_bias": "SUSPICIOUS", "weight": 0.10},
     "tailgate_detected": {"ground_truth_bias": "SUSPICIOUS", "weight": 0.05},
 }
+
+# ---------------------------------------------------------------------------
+# ADV-V4 behavioral adversarial description pools (v4)
+# ---------------------------------------------------------------------------
+# Each pool supplies deceptive descriptions for one behavioral adversarial pattern.
+# Descriptions are written to suggest the WRONG ground truth. The actual GT is
+# assigned by assign_ground_truth_v2 on the biased context signals — not by the description.
+# These pools are ISOLATED from all v2/v3 pools to prevent seed regression.
+
+# LOITERING_AS_WAITING: description suggests suspicious loitering (→ reader expects THREAT/SUSPICIOUS),
+# but context signals (badge recent, daytime, low-sensitivity zone) resolve to BENIGN.
+ADV_V4_LOITERING_AS_WAITING = [
+    "Person stationary near access point, 22 min without badge event — loitering pattern",
+    "Individual standing idle outside service gate, movement minimal, purpose unclear",
+    "Loitering alert: person near perimeter fence, no authorized purpose observed",
+    "Camera analytics: stationary human, zone-exterior, duration >15 min, flagged",
+    "Person pacing slowly near parking entry, repeated passes, no vehicle access logged",
+    "Individual at facility edge, stationary 28 min, no appointment on file",
+    "Loitering detection: human class object, east perimeter, 19:04, no egress",
+    "Person near equipment entrance, not entering, not leaving, identity unverified",
+]
+
+# AUTHORIZED_AS_INTRUSION: description suggests unauthorized entry (→ reader expects THREAT),
+# but context signals (recent badge grant <10 min, interior zone, low severity) resolve to BENIGN.
+ADV_V4_AUTHORIZED_AS_INTRUSION = [
+    "Unauthorized access attempt: person entered restricted corridor without visible escort",
+    "Intrusion indicator: individual bypassing primary checkpoint, movement purposeful",
+    "Access violation pattern: person moving through controlled zone, no logged credential",
+    "Camera alert: individual in server room area, unscheduled presence, 14:22",
+    "Person entered utility corridor via side door, entry method atypical for shift",
+    "Analytics: human in restricted zone during business hours, credential check pending",
+    "Individual traversing equipment hall, no escort visible, camera confidence 0.81",
+    "Access anomaly: person past badge barrier, movement toward high-value asset area",
+]
+
+# ENVIRONMENTAL_AS_HUMAN: description suggests human presence (→ reader expects THREAT/SUSPICIOUS),
+# but context signals (high-FPR device, wind/weather, parking/perimeter zone) resolve to BENIGN.
+ADV_V4_ENVIRONMENTAL_AS_HUMAN = [
+    "Human-class motion detected near panel array — gait analysis confidence 0.71",
+    "Camera analytics: person-shaped object at perimeter, thermal signature detected",
+    "Human presence alert: upright form detected at fence line, 03:14, zone-perimeter",
+    "AI classification: human silhouette, zone-exterior, movement purposeful, 02:47",
+    "Motion alert: two-limb bipedal movement pattern detected near utility corridor",
+    "Camera trigger: upright object at 1.6m height, consistent with human profile",
+    "Thermal: warm body-temperature signature detected near inverter station, stationary",
+    "Analytics engine: person class detected, east perimeter, confidence 0.68, night",
+]
 
 
 def sample_zone(rng: np.random.RandomState) -> dict:

@@ -4,33 +4,46 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
 [![CI](https://github.com/YuYongJu/psai-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/YuYongJu/psai-bench/actions/workflows/ci.yml)
 
-**Do frontier AI models actually benefit from video when triaging physical security alerts — or are they just reasoning about metadata?**
+PSAI-Bench is an open-source benchmark for evaluating **any** AI system on physical security alert triage. Generate realistic scenarios, run your own system against them, and score the outputs.
 
-PSAI-Bench is an evaluation framework that answers this question. It generates realistic security scenarios grounded in real datasets (UCF Crime, Caltech Pedestrian), scores model outputs on safety-weighted metrics, and measures the **perception-reasoning gap** — the difference between what a model achieves with metadata alone vs. metadata + video.
+## Quick Start: Bring Your Own System
 
-**Key finding:** GPT-4o achieves a near-perfect Threat Detection Rate (0.999) but collapses to a 0.580 Aggregate Score due to over-reliance on the SUSPICIOUS verdict (42.4% of responses). The model catches almost every threat but at the cost of drowning operators in false escalations — exactly the failure mode PSAI-Bench is designed to detect.
+### 1. Generate scenarios
+
+```bash
+psai-bench generate --track metadata --source ucf --n 3000 --seed 42 --version v2
+```
+
+### 2. Run your system
+
+Feed the generated JSON to your system (LLM, ML model, rule engine, hybrid — anything that produces verdicts). See [Output Format](#output-format) for the required schema.
+
+### 3. Score outputs
+
+```bash
+psai-bench score --scenarios data/generated/metadata_ucf_seed42_v2.json \
+    --outputs path/to/your_system_outputs.json
+```
+
+## What PSAI-Bench Tests
+
+v2.0 uses context-dependent ground truth — the same description text can be THREAT, SUSPICIOUS, or BENIGN depending on zone type and sensitivity, time of day, and device reliability. No single input field reveals the answer; systems must reason across multiple signals simultaneously.
+
+See [Ground Truth Decision Rubric](docs/decision-rubric.md) for the full logic and worked examples.
+
+## Metrics
+
+| Metric | What It Measures |
+|--------|-----------------|
+| **TDR** (Threat Detection Rate) | Fraction of actual threats detected (classified THREAT or SUSPICIOUS) |
+| **FASR** (False Alarm Suppression Rate) | Fraction of benign alerts correctly classified as BENIGN |
+| **Decisiveness** | Fraction of verdicts that commit to THREAT or BENIGN (not SUSPICIOUS) |
+| **Calibration (ECE)** | How well confidence scores match actual accuracy |
+| **Per-Difficulty Accuracy** | Accuracy broken down by scenario difficulty tier |
 
 ## Results
 
-### UCF Crime Metadata Track (3,000 scenarios)
-
-| System | Accuracy | TDR | FASR | Safety Score | ECE | Aggregate |
-|--------|----------|-----|------|-------------|-----|-----------|
-| **GPT-4o** | 0.645 | 0.999 | 0.792 | 0.947 | 0.186 | **0.580** |
-| Severity Heuristic | 0.762 | 1.000 | 1.000 | 1.000 | — | 0.832 |
-| Majority Class | 0.582 | 1.000 | 0.000 | 0.750 | — | 0.444 |
-| Random | 0.326 | 0.656 | 0.307 | 0.569 | — | 0.446 |
-| Always SUSPICIOUS | 0.179 | 1.000 | 0.000 | 0.750 | — | -0.204 |
-
-> GPT-4o's raw accuracy (0.645) is beaten by the severity heuristic baseline (0.762) — a rule-based system that uses only the alert severity field. The model's strength is threat detection (TDR=0.999), but its SUSPICIOUS overuse (42.4% vs. the 30% penalty threshold) tanks the aggregate score.
-
-### GPT-4o Per-Difficulty Breakdown
-
-| Difficulty | Accuracy | Safety Score |
-|-----------|----------|-------------|
-| Easy | 0.723 | — |
-| Medium | 0.587 | — |
-| Hard | 0.625 | — |
+**v2.0 scenarios have not yet been evaluated.** The v1.0 results were generated with scenarios that had single-field leakage — description text alone could predict ground truth with near-perfect accuracy. Those results are not meaningful under v2.0's context-dependent ground truth design. New evaluation results will be published once v2.0 scenario generation and scoring are validated.
 
 ## Evaluation Tracks
 
@@ -42,73 +55,41 @@ PSAI-Bench supports three evaluation tracks with increasing perceptual requireme
 | **Visual** | Metadata + video clip URI | 2,900 (UCF Crime) | Whether video adds triage value |
 | **Multi-Sensor** | Camera + PIR + badge + vibration + thermal | 1,000 (synthetic) | Sensor fusion reasoning |
 
-## Metrics
+## Built-in Evaluators
 
-| Metric | What It Measures |
-|--------|-----------------|
-| **TDR** (Threat Detection Rate) | Fraction of threats classified as THREAT or SUSPICIOUS |
-| **FASR** (False Alarm Suppression Rate) | Fraction of benign alerts correctly classified as BENIGN |
-| **Safety Score** | Weighted combination: `(w * TDR + FASR) / (w + 1)` at w=3 |
-| **ECE** (Expected Calibration Error) | How well confidence scores match actual accuracy |
-| **Aggregate Score** | `0.4 * accuracy + 0.4 * safety_score + 0.2 * calibration_factor - suspicious_penalty` |
+PSAI-Bench ships with built-in evaluators for GPT-4o, Claude, and Gemini as **reference implementations**. These are example integrations showing how to connect an LLM to the benchmark — they are not the intended workflow for production use.
 
-The **SUSPICIOUS penalty** activates when a system uses the SUSPICIOUS verdict for >30% of responses, preventing the degenerate strategy of hedging everything.
+```bash
+# Example: run the built-in GPT-4o evaluator (requires OPENAI_API_KEY)
+psai-bench evaluate --scenarios data/generated/metadata_ucf_seed42_v2.json --model gpt-4o --n 100
+```
+
+For serious benchmarking, use the [Bring Your Own System](#quick-start-bring-your-own-system) workflow.
+
+## Output Format
+
+Your system must produce a JSON array where each element has:
+
+```json
+{
+  "alert_id": "string",
+  "verdict": "THREAT | SUSPICIOUS | BENIGN",
+  "confidence": 0.0
+}
+```
+
+`confidence` is defined as the probability that the verdict is correct (0.0–1.0). The fields `reasoning` and `processing_time_ms` are optional and ignored by the scorer.
 
 ## Installation
 
 ```bash
 pip install -e .
 
-# With API client support (for running evaluations)
+# With API client support (for running the built-in evaluators)
 pip install -e ".[api]"
 
 # With development tools
 pip install -e ".[dev]"
-```
-
-## Quick Start
-
-### Generate scenarios
-
-```bash
-# Metadata track — UCF Crime dataset (3,000 scenarios)
-psai-bench generate --track metadata --source ucf --n 3000 --seed 42
-
-# Metadata track — Caltech Pedestrian dataset (5,000 scenarios)
-psai-bench generate --track metadata --source caltech --n 5000 --seed 42
-
-# Multi-sensor track (1,000 scenarios)
-psai-bench generate --track multi_sensor --n 1000 --seed 42
-```
-
-### Run baselines
-
-```bash
-psai-bench baselines --scenarios data/generated/metadata_ucf_seed42.json
-```
-
-### Evaluate a frontier model
-
-```bash
-# Requires OPENAI_API_KEY environment variable
-psai-bench evaluate --scenarios data/generated/metadata_ucf_seed42.json --model gpt-4o --n 100
-
-# Available models: claude-sonnet, gpt-4o, gemini-flash
-```
-
-### Score outputs
-
-```bash
-psai-bench score --scenarios data/generated/metadata_ucf_seed42.json \
-    --outputs results/evaluations/gpt-4o_ucf_metadata_run1.json
-```
-
-### Compare two systems
-
-```bash
-psai-bench compare --scenarios data/generated/metadata_ucf_seed42.json \
-    --outputs-a results/evaluations/gpt-4o_run1.json \
-    --outputs-b results/baselines/ucf/severity_heuristic_outputs.json
 ```
 
 ## Architecture
@@ -117,24 +98,34 @@ psai-bench compare --scenarios data/generated/metadata_ucf_seed42.json \
 psai_bench/
   cli.py           # Click CLI with generate, score, evaluate, compare commands
   generators.py    # Scenario generators for all 3 tracks
-  distributions.py # Realistic alert distribution models
-  evaluators.py    # API wrappers for Claude, GPT-4o, Gemini
-  scorer.py        # Scoring engine (TDR, FASR, Safety Score, ECE, Aggregate)
+  distributions.py # Realistic alert distribution models + assign_ground_truth_v2
+  evaluators.py    # API wrappers for Claude, GPT-4o, Gemini (reference implementations)
+  scorer.py        # Scoring engine (TDR, FASR, Decisiveness, ECE, dashboard)
   baselines.py     # 4 statistical baselines
   statistics.py    # McNemar's test, bootstrap CIs, run consistency
   validation.py    # Scenario and submission validators
   schema.py        # JSON Schema definitions for alerts and outputs
   video_mapper.py  # Maps UCF Crime videos to visual track scenarios
   downloader.py    # HuggingFace dataset downloader
+docs/
+  decision-rubric.md  # Ground truth decision logic with worked examples
 ```
+
+## Known Limitations
+
+- **3-class triage only** — verdicts are THREAT / SUSPICIOUS / BENIGN. No dispatch actions (e.g., "send guard" vs. "review later") or severity sub-levels.
+- **No video track in v2.0** — visual scenarios exist in the schema but v2.0 focuses on metadata-only reasoning. Video evaluation is planned for v3.0.
+- **Single-annotator ground truth** — labels are assigned by a deterministic decision function, not by multiple human annotators. This means there is no inter-annotator agreement metric.
+- **Synthetic scenarios only** — all scenarios are procedurally generated from distribution models, not drawn from real incident logs.
+- **No temporal context** — each scenario is independent. Alert sequences and escalation patterns are out of scope for v2.0.
 
 ## Reproducibility
 
-All generated data is deterministic given a seed. The canonical datasets are produced by:
+All generated data is deterministic given a seed. The canonical v2.0 dataset is produced by:
 
 ```bash
-psai-bench generate --track metadata --source ucf --n 3000 --seed 42
-psai-bench generate --track metadata --source caltech --n 5000 --seed 42
+psai-bench generate --track metadata --source ucf --n 3000 --seed 42 --version v2
+psai-bench generate --track metadata --source caltech --n 5000 --seed 42 --version v2
 ```
 
 **NumPy version note:** Scenario generation uses `numpy.random.RandomState` for determinism. Per [NEP 19](https://numpy.org/neps/nep-0019-rng-policy.html), the bit stream may differ across NumPy major versions. Results in this repository were generated with NumPy 1.24+ on Python 3.11.
@@ -146,12 +137,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
 ## Citation
 
 ```bibtex
-@misc{psai-bench-2025,
+@misc{psai-bench-2026,
   title   = {PSAI-Bench: Physical Security AI Triage Benchmark},
   author  = {Apisar, Addison},
-  year    = {2025},
+  year    = {2026},
   url     = {https://github.com/YuYongJu/psai-bench},
-  note    = {Evaluates whether frontier AI models benefit from video in physical security triage}
+  note    = {Evaluates AI system triage performance on non-trivially-solvable physical security scenarios}
 }
 ```
 

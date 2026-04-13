@@ -1,310 +1,171 @@
-# Pitfalls Research
+# Domain Pitfalls: v4.0 Operational Realism
 
-**Domain:** Open-source release of an existing Python ML benchmark
-**Researched:** 2026-04-12
-**Confidence:** HIGH (most pitfalls are directly observed in the repo or well-documented in official sources)
+**Domain:** AI benchmark — adding 5-class dispatch, cost-aware scoring, multi-site generalization, adversarial robustness to an existing 3-class benchmark
+**Researched:** 2026-04-13
+**Source basis:** Direct codebase analysis (scorer.py, schema.py, generators.py, validation.py, tests/). Evidence lines cited throughout.
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Large Files Permanently Embedded in Git History
+### Pitfall 1: Metric Definitions Are Baked Into 3-Class Assumptions
 
-**What goes wrong:**
-The 16MB of generated JSON (3 files in `data/generated/`) was committed in the first and only real commit (7eda522). Even after adding `data/generated/` to `.gitignore` and removing files from the working tree, the data remains in git history. Every `git clone` of the repo downloads those 16MB forever. GitHub also has a soft warning threshold at 50MB total repo size and a hard limit at 100MB for individual files.
+**What goes wrong:** Every primary metric in `scorer.py` is derived from the three-way partition {THREAT, SUSPICIOUS, BENIGN}. TDR is "THREAT caught as THREAT or SUSPICIOUS" (lines 423–427). FASR is "BENIGN caught as BENIGN" (lines 429–433). Decisiveness is "not SUSPICIOUS" (lines 458–461). The aggregate score formula (lines 465–469) combines all four metrics. With 5-class dispatch, SUSPICIOUS disappears as a verdict class; the THREAT/BENIGN/SUSPICIOUS partition no longer exists, so every formula is undefined.
 
-**Why it happens:**
-First commit contained everything at once. With a 2-commit history there's no "safe" commit to rebase onto — the large files sit in the very first content commit.
+**Why it happens:** Adding dispatch classes feels like "extend the enum." It is not. It requires re-deriving what detection, suppression, and decisiveness mean in a 5-class space before a single line of code is written.
 
-**How to avoid:**
-Use `git-filter-repo` (recommended by git official docs over deprecated `git filter-branch`) to excise the three files from all history before the repo is public. With only 2 commits this is fast and low-risk. Steps:
-1. `pip install git-filter-repo`
-2. `git filter-repo --path data/generated/ --invert-paths`
-3. Force-push to remote with `git push --force-with-lease`
-4. Verify with `git cat-file --batch-check --batch-all-objects | sort -k3 -n | tail` — large blobs should be gone
+**Consequences:** If SUSPICIOUS is removed from the output schema without updating the metric definitions first, TDR becomes undefined (what does "THREAT caught as SUSPICIOUS" mean when SUSPICIOUS is gone?), FASR remains calculable but loses its counterpart, decisiveness inverts (now 100% decisive by definition — useless), and the aggregate produces a number that means nothing.
 
-**Warning signs:**
-- `git count-objects -vH` shows pack size > 2MB after removing data files from working tree
-- `du -sh .git/` is larger than the source code itself
-- GitHub repo "About" sidebar shows repository size > 5MB
+**Prevention:** Define new metric semantics on paper before touching code. Specific questions to answer: Does "operator review" count as a partial detection for TDR purposes? Does "auto-suppress" count as suppression for FASR? What is the dispatch equivalent of decisiveness? Only after written answers to these do you change `ScoreReport`.
 
-**Phase to address:** Repository Hygiene (before any public push — this must be the very first action)
+**Detection:** Tests that pass `SUSPICIOUS` in `verdict` will silently accept invalid dispatch classes once the schema is updated but before metrics are fixed. Write tests that assert metric invariants (e.g., TDR + miss_rate = 1.0) before changing the schema.
 
 ---
 
-### Pitfall 2: Generated Data Removed from Git But Not Reproducible
+### Pitfall 2: `VERDICTS` Is the Viral Constant — It Touches Six Systems
 
-**What goes wrong:**
-Files are stripped from history, `.gitignore` is updated, but there is no documented, tested way for a new user to regenerate the exact scenarios. They clone the repo, run `psai-bench score`, and get a `FileNotFoundError` on `data/generated/metadata_ucf_seed42.json`. The benchmark is effectively unusable without a reproduction step.
+**What goes wrong:** `schema.py` line 140 defines `VERDICTS = ("THREAT", "SUSPICIOUS", "BENIGN")`. This constant is imported and used in:
+- `validation.py` line 95: rejects any output whose verdict is not in VERDICTS
+- `validation.py` line 284: iterates VERDICTS to check class balance in ground truth
+- `baselines.py` line 20: picks uniformly from VERDICTS for the random baseline
+- `test_core.py` line 237: asserts every generated scenario's `_meta.ground_truth` is in VERDICTS
+- `test_leakage.py` line 127: asserts exactly 3 GT classes exist
+- `OUTPUT_SCHEMA` enum (schema.py line 123): schema validation rejects non-VERDICTS values
+- `_META_SCHEMA_V2` ground_truth enum (schema.py line 148): same lock
 
-**Why it happens:**
-The `psai-bench generate` command exists, but the exact invocation (track, source, n, seed, output path) that produces the canonical evaluation set is not documented. Users guess wrong seeds or wrong output paths and get different scenario files that produce different scores, breaking comparability.
+Changing `VERDICTS` without understanding all six downstream uses produces either silent failures (baselines generate 5-class outputs that old scorers process as 0% accuracy) or hard crashes (jsonschema validation raises on every output that uses a new dispatch class).
 
-**How to avoid:**
-- Add a `Makefile` or `scripts/reproduce.sh` with exact generate commands for each canonical dataset
-- Document the exact invocations in README under a "Reproduce Benchmark Data" section
-- Consider adding a `psai-bench download-data` or `psai-bench init` subcommand that runs all generation steps with canonical defaults
-- Add an integration test that runs `psai-bench generate --track metadata --source ucf --n 100 --seed 42` and asserts the first scenario's ID matches the expected value (detects numpy RNG drift across versions)
+**Why it happens:** The constant was designed as a single source of truth, which is correct. The mistake is treating "add to the tuple" as the change, when it's actually "change the type system across six consumers simultaneously."
 
-**Warning signs:**
-- README mentions `data/generated/` directory but does not show the `psai-bench generate` command
-- CI passes but does not run `psai-bench generate` at all
-- `psai-bench generate` output file name differs from the path used in `psai-bench score` examples
+**Consequences:** The 238 existing tests will fail in ways that appear unrelated to the change (balance checks, schema validation, baseline accuracy assertions, ground truth membership checks).
 
-**Phase to address:** Repository Hygiene + README Documentation
+**Prevention:** Map every import of `VERDICTS` before changing it. The backward-compatible path is to add a separate `DISPATCH_CLASSES` constant and a `DISPATCH_OUTPUT_SCHEMA`, keeping `VERDICTS` unchanged for 3-class users. The `verdict` field stays as-is; a new `dispatch` field carries the 5-class decision. Existing outputs remain valid; new outputs carry both fields.
 
----
-
-### Pitfall 3: NumPy RNG Output Changes Across Library Versions
-
-**What goes wrong:**
-`psai-bench generate --seed 42` produces scenario IDs and ground-truth labels that differ between numpy 1.24 and numpy 2.x because numpy's random Generator bit stream is explicitly not version-stable (documented in NEP 19). A user on numpy 2.0 regenerates the canonical dataset, gets slightly different scenarios, and scores look wrong when compared to the published baseline results.
-
-**Why it happens:**
-`pyproject.toml` pins `numpy>=1.24` with no upper bound. numpy 2.0 was released in 2024 and contains generator changes. The project uses numpy for scenario generation (random sampling, label assignment), making bit-for-bit reproducibility version-sensitive.
-
-**How to avoid:**
-- Pin numpy to a major version range in pyproject.toml: `numpy>=1.24,<3`
-- Document in README which numpy version was used for the canonical v1.0 dataset: "Generated with numpy 1.26.x, seed=42"
-- Alternatively, ship a SHA-256 checksum for each canonical JSON file so users can verify their regeneration matches
-
-**Warning signs:**
-- CI tests only run on the latest numpy
-- No numpy version pinned in CI matrix
-- Integration test hashes scenario IDs but test passes on numpy 1.x, fails silently on numpy 2.x
-
-**Phase to address:** Repository Hygiene + CI Setup
+**Detection:** Run `grep -rn "VERDICTS" .` before committing any schema change. If the list is longer than you expect, stop and map it fully.
 
 ---
 
-### Pitfall 4: Broken `pip install` Due to Missing Package Metadata
+### Pitfall 3: The `verdict` vs. `dispatch` Architectural Decision Is a Gating Question
 
-**What goes wrong:**
-`pip install psai-bench` (or `pip install -e .`) appears to succeed but the installed package is missing critical files or metadata. Specifically:
-- `readme` field in `pyproject.toml` currently uses `{text = "...", content-type = "text/plain"}` with a one-line description — not the actual README.md file. PyPI will show a bare one-liner instead of the full README.
-- `project.urls` (homepage, repository, documentation) are absent — PyPI listing looks unfinished.
-- `project.authors` is absent — no author attribution on PyPI.
-- `project.classifiers` are absent — the package won't appear in PyPI searches for "machine learning" or "benchmarks".
+**What goes wrong:** The v4.0 milestone requires 5-class dispatch decisions. The current `OUTPUT_SCHEMA` requires `verdict` in `["THREAT", "SUSPICIOUS", "BENIGN"]`. There are exactly two paths:
 
-**Why it happens:**
-`pyproject.toml` was created functionally (enough to make `pip install -e .` work) but never configured for public distribution.
+**Path A — Replace:** `verdict` enum becomes the 5 dispatch classes. Every existing output file, test fixture, CLI command, and integration guide that uses `verdict` breaks immediately. The 3-class TDR/FASR metrics become meaningless. The 238 tests fail.
 
-**How to avoid:**
-- Switch `readme` to `readme = "README.md"` (standard form)
-- Add `authors`, `keywords`, `classifiers`, and `[project.urls]`
-- Run `pip install -e . && pip show psai-bench` to verify metadata before publishing
-- Use `twine check dist/*` after building to catch PyPI metadata validation errors before upload
+**Path B — Additive:** Keep `verdict` (3-class) required; add `dispatch` (5-class) optional. Existing users continue unaffected. New users populate both. The scorer adds a parallel scoring path for dispatch decisions. Backward compatibility is preserved by the field being optional.
 
-**Warning signs:**
-- `pip show psai-bench` shows empty Home-page or Author
-- PyPI package page shows the bare description string instead of formatted README
-- `python -c "import importlib.metadata; print(importlib.metadata.metadata('psai-bench')['Summary'])"` returns the wrong string
+**Why it matters:** This is the decision that determines the scope of every other change in v4.0. If Path A is chosen, the cost is a complete test suite overhaul and a breaking release. If Path B is chosen, the cost is two parallel scoring paths that must stay consistent.
 
-**Phase to address:** Project Metadata + PyPI Packaging
+**Consequences of deferring:** Every implementation decision made before resolving this choice may need to be undone. If you write cost-aware scoring using `verdict` and then decide to use `dispatch`, the scoring functions need to be rewritten.
+
+**Prevention:** Commit to Path A or Path B in writing before writing any v4.0 code. The milestone context states "backward compatibility for 3-class triage users" — this is strong evidence for Path B.
 
 ---
 
-### Pitfall 5: LICENSE File Absent Despite License Declaration
+### Pitfall 4: The Confusion Matrix Is Hardcoded as 3x3
 
-**What goes wrong:**
-`pyproject.toml` declares `license = "Apache-2.0"` but there is no `LICENSE` file in the repository. This is legally incomplete: downstream users have no document to satisfy the Apache 2.0 obligation of including the license text with redistributions. GitHub's "Used by" and license detection features will also fail to detect the license.
+**What goes wrong:** `scorer.py` lines 502–510 hardcode `labels = ["THREAT", "SUSPICIOUS", "BENIGN"]` and build a 3x3 confusion matrix. Downstream consumers in tests (`test_core.py` lines 357–359), the dashboard (`format_dashboard`), and any external tooling that parses JSON output all assume `confusion_matrix["THREAT"]["THREAT"]` is a valid key path.
 
-**Why it happens:**
-Metadata declaration and physical file are two separate things. It's easy to write `license = "Apache-2.0"` in TOML and consider it done.
+**Why it matters:** With 5 dispatch classes, the confusion matrix becomes 5x5 (or N×3 if ground truth stays 3-class while predictions are 5-class). The former shape breaks all existing matrix tests. The latter shape is ambiguous and requires documenting which dimension is which.
 
-**How to avoid:**
-- Copy the full Apache-2.0 license text into `LICENSE` (not `LICENSE.md`) at repo root
-- Add copyright header: `Copyright 2026 [Author Name]`
-- Apache 2.0 also recommends a `NOTICE` file for attribution — not required here (no third-party Apache-licensed code to attribute) but good practice
-- Verify GitHub detects the license via the repository "About" sidebar
+**Prevention:** Define the confusion matrix shape explicitly before coding. If ground truth stays 3-class (THREAT/SUSPICIOUS/BENIGN) and predictions become 5-class dispatch, the matrix is 3 rows × 5 columns. Name both axes explicitly in the schema docs. Test the new shape with fixture data before wiring it to the dashboard.
 
-**Warning signs:**
-- GitHub sidebar shows "No license" or question mark next to the repo
-- `pip show psai-bench` shows `License: UNKNOWN`
-- `twine check dist/*` warns about license metadata
-
-**Phase to address:** Documentation + Licensing (first phase)
+**Detection:** `test_core.py` lines 345–359 will fail immediately if the matrix shape changes without updating the test.
 
 ---
 
-### Pitfall 6: CI That Passes Locally But Breaks on First Run
+### Pitfall 5: Cost Numbers Without Sensitivity Analysis Are Indefensible
 
-**What goes wrong:**
-GitHub Actions CI is written but fails on its first run because:
-- Tests assume `data/generated/` files exist (they are now gitignored)
-- The `api` optional dependency group references `google-genai>=1.0` but the package is actually `google-generativeai` or `google-genai` (the SDK was renamed in 2024)
-- Python 3.10 matrix entry succeeds locally but `actions/setup-python` may not have 3.10 cached on the runner, causing a slow cold start or an unexpected failure
+**What goes wrong:** `VISION.md` quotes "$200-500 for false dispatch" and "potentially catastrophic" for missed threats. These are placeholders, not defensible values. If the benchmark publishes a single cost model without sensitivity analysis, any user can object that their armed response costs $50 (contracted security) or $2,000 (off-duty police). Different cost assumptions flip system rankings: System A beats System B at 10:1 missed-threat weight but loses at 3:1. A published benchmark that changes its winner based on cost assumptions is not a benchmark — it is a parameter choice.
 
-**Why it happens:**
-CI is written to mirror local dev assumptions. Tests that pass locally pass because the developer has the generated files and the right packages already installed. A clean CI environment exposes assumptions.
+**Why it happens:** The existing scorer already handles this correctly for safety scores (three weight ratios: 1:1, 3:1, 10:1 at `scorer.py` lines 442–444). The temptation is to add a single "operational cost" metric the same way accuracy was added: one number.
 
-**How to avoid:**
-- Ensure no test imports or opens files in `data/generated/` without first running `psai-bench generate`
-- Add a CI step that runs the generate command before tests, or mock file I/O in tests
-- Verify `google-genai` package name on PyPI before writing it into CI requirements
-- Run `act` locally to simulate GitHub Actions before pushing the workflow
-- Pin `actions/setup-python` to `@v5` (current stable) not a commit hash or `@main`
+**Consequences:** The benchmark becomes a tool for cherry-picking results. A vendor running their system can find the cost ratio that makes them win and cite only that number.
 
-**Warning signs:**
-- CI fails on the very first run with `FileNotFoundError` or `ModuleNotFoundError`
-- Workflow uses `actions/setup-python@v3` (deprecated, uses Node.js 16 which is EOL)
-- Workflow installs `.[api]` but evaluators tests are not skipped when API keys are absent
+**Prevention:** Follow the existing pattern: report expected operational cost at multiple cost ratio assumptions (e.g., false dispatch cost = 1x, 10x, 50x relative to operator review time). Never report a single operational cost score without the accompanying sensitivity table. The cost model must be documented with explicit assumptions and users must be able to supply their own cost vectors.
 
-**Phase to address:** CI Setup
+**Detection:** If any metric in `ScoreReport` is named `operational_cost` or `expected_cost` without a corresponding `operational_cost_params` that records what cost vector was used, the metric is non-reproducible.
 
 ---
 
-### Pitfall 7: README Explains What, Not Why — Fails to Land the Research Contribution
+### Pitfall 6: Multi-Site Generalization Testing Has Structural Leakage
 
-**What goes wrong:**
-The README describes how to install and run the benchmark but buries or omits the core research claim: "Do frontier models actually benefit from video data or just reason about metadata?" Without this framing, a LinkedIn reader skims past it, and an academic user doesn't know why this benchmark is different from existing security datasets.
+**What goes wrong:** The generator already couples `site_type` to correlated features: zone names (ZONE_NAMES dict by zone type, `distributions.py`), device quality distributions (which are site-independent but the SITE_CATEGORY_BLOCKLIST in `generators.py` line 51 filters categories by site), and scenario descriptions (the shared pool is not stratified by site type, so frequency distributions of descriptions differ across sites). A "train on solar / test on commercial" split designed to measure generalization will leak site identity through these correlated features.
 
-**Why it happens:**
-Technical authors default to documentation mode (usage, API reference, commands) and skip narrative mode (motivation, gap in existing work, key finding).
+**Concrete example:** Solar scenarios never contain "Shoplifting" or "Robbery" categories (SITE_CATEGORY_BLOCKLIST line 51). A model fine-tuned on solar scenarios learns that Shoplifting → BENIGN is an impossible label. When tested on commercial scenarios where Shoplifting → THREAT, the model's prior is wrong. But the gap measured is not "does the model generalize?" — it is "did we accidentally teach the model site identity through category filtering?"
 
-**How to avoid:**
-- Open README with a one-paragraph "Why this exists" that names the perception-reasoning gap hypothesis explicitly
-- Include the actual GPT-4o result (TDR=0.999 but Aggregate=0.580 due to SUSPICIOUS overuse) as the motivating example — concrete numbers are more compelling than abstractions
-- Add a results table early in the README (before installation instructions)
-- Add a "Citation" or "How to Cite" section — academic benchmarks without a citation block are frequently not cited even when used
+**Why it happens:** The SITE_CATEGORY_BLOCKLIST was correctly added to prevent contextual nonsense (no road accidents at indoor facilities). It was not designed with generalization testing in mind.
 
-**Warning signs:**
-- README section order: Installation → Usage → Results (burying the "so what")
-- No concrete numbers in the first two paragraphs
-- No citation block or CITATION.cff file
+**Prevention:** When building multi-site splits, audit which generator features are correlated with site type. At minimum: verify that zone name vocabulary does not uniquely identify sites, verify that category distributions in the test split are not a strict subset of train split categories, and document which features a model could use as site-identity proxies. If a model can determine site type from the feature vector without using `context.site_type`, the generalization test is compromised.
 
-**Phase to address:** Documentation (README)
+**Detection:** Train a simple logistic regression on generated scenarios with `site_type` removed from input. If it can classify site type above chance from the remaining features, leakage exists.
 
 ---
 
-### Pitfall 8: Results JSON Files in Git Create Expectations of Permanence
+## Moderate Pitfalls
 
-**What goes wrong:**
-`results/` is currently committed (15 files, ~16MB). The PROJECT.md notes a pending decision: "Keep results/ in repo as examples." If results stay in git, future evaluations that change scores will create confusing commits ("why did the GPT-4o score change?"), and contributors may think they need to re-run expensive API evaluations just to contribute code changes.
+### Pitfall 7: v4.0 "Adversarial" Conflicts with v2.0 `adversarial` Flag
 
-**Why it happens:**
-Results feel like documentation at the time of first commit. They become technical debt when the benchmark evolves.
+**What goes wrong:** `_meta.adversarial` (schema.py line 156) currently marks scenarios where one context signal was deliberately flipped to create conflicting signals (e.g., HIGH severity + BENIGN ground truth). The injection logic is in `generators.py` `_inject_adversarial_signals` (line 157), which flips severity, zone type, or time-of-day. This is signal-conflict adversarial.
 
-**How to avoid:**
-- Move canonical results to a GitHub Release asset (zip file attached to v1.0.0 tag) rather than committed files
-- Keep only a small `results/examples/` with synthetic/baseline outputs (no API costs, deterministic) in git
-- Add `results/evaluations/*.json` to `.gitignore` and document in CONTRIBUTING.md that model evaluation results should not be committed
+The v4.0 adversarial scenarios described in VISION.md are behavioral adversarial: "loitering that looks like authorized waiting," "authorized access that looks like intrusion," "environmental events that look like human activity." These are different — they involve plausible real-world deception scenarios, not mechanically inverted signal values.
 
-**Warning signs:**
-- `results/` contains files > 1MB committed to git
-- CI runs `psai-bench score` against actual model outputs and commits the results
-- Contributors can't run the full test suite without API keys because tests reference `results/evaluations/`
+If both are stored under `_meta.adversarial = True`, the metrics conflate two distinct model failure modes. A model failing on signal-conflict adversarial is failing on reasoning. A model failing on behavioral adversarial is failing on pattern recognition. These require different interventions.
 
-**Phase to address:** Repository Hygiene
+**Prevention:** Add a new `_meta.adversarial_type` field with values like `"signal_conflict"` (existing) and `"behavioral_deception"` (new). Report adversarial metrics split by type.
 
 ---
 
-## Technical Debt Patterns
+### Pitfall 8: Decisiveness Becomes Meaningless in 5-Class Output
 
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| `pyproject.toml` readme as inline text | Works for local install | PyPI shows bare description; README.md not distributed | Never — costs 1 line to fix |
-| No upper bound on numpy (`>=1.24`) | Avoids `ResolutionImpossible` errors | Generation bit-stream may change in numpy 2.x, breaking score comparisons | Never for benchmark data integrity |
-| Generated data in git | First-clone "just works" | Repo bloats; users can't trust data is from canonical seed | Never — documented seed + generate command is correct approach |
-| Skipping CITATION.cff | Saves 10 minutes | Academic users don't cite the tool; impact is invisible | Never for a benchmark targeting researchers |
-| CI tests skip all API-dependent tests | No API key costs | Core evaluation path untested in CI | Acceptable if mocking strategy is documented |
+**What goes wrong:** Decisiveness is currently defined as "fraction of THREAT|BENIGN predictions (not SUSPICIOUS)." It measures whether the model avoids hedging. In a 5-class dispatch schema, if SUSPICIOUS is removed, every prediction is by definition "decisive" — the metric is 1.0 for all systems and provides no discriminative signal.
+
+**Prevention:** Redefine decisiveness for 5-class: perhaps "fraction of predictions that are auto-suppress or armed response" (the two most definitive actions), or "fraction of predictions that are not operator-review" (the hedge equivalent). Document the new definition explicitly. Do not preserve the field name `decisiveness` if the formula changes; rename it to avoid silent semantic drift.
 
 ---
 
-## Integration Gotchas
+### Pitfall 9: The `score_multiple_runs` Key Metrics List Is a Maintenance Trap
 
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| GitHub Actions + `data/generated/` | Tests assume files exist from working tree | Add a setup step or use pytest fixtures that generate minimal test data at test time |
-| PyPI + setuptools + `pyproject.toml` | `readme = {text = "..."}` doesn't pull in README.md | Use `readme = "README.md"` — setuptools resolves this to the file |
-| `google-genai` optional dep | Package name changed during 2024 SDK unification | Verify current PyPI package name is `google-genai` (not `google-generativeai`) before publishing |
-| HuggingFace dataset download | UCF Crime dataset requires HuggingFace login; undocumented for new users | Add a "Dataset Access" section to README explaining HF login requirement |
-| Apache-2.0 + PyPI classifiers | `license = "Apache-2.0"` in TOML is SPDX format but classifiers use a different string | Classifiers entry must be `"License :: OSI Approved :: Apache Software License"` |
+**What goes wrong:** `scorer.py` lines 573–577 hardcode `key_metrics = ["accuracy", "tdr", "fasr", "safety_score_3_1", "ece", "aggregate_score", "suspicious_fraction", "decisiveness"]`. When new cost-aware metrics are added to `ScoreReport`, this list must be manually updated or the new metrics will not appear in multi-run statistical summaries.
+
+**Prevention:** Either derive the key metrics list from `ScoreReport` field names with an annotation/tag, or add a test that asserts every `ScoreReport` field of type `float` appears in `key_metrics`.
 
 ---
 
-## Performance Traps
+### Pitfall 10: Seed Reproducibility Breaks If Generator Logic Changes
 
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Generating 3,000+ scenarios in a single test run | CI takes 3+ minutes per test suite, developers skip running tests | Generate small N (100) in tests, use seed fixture | CI test suites; affects any machine running full test suite |
-| Loading entire JSON scenario file into memory for scoring | Scoring 3,000-scenario file peaks at 500MB+ RAM | Stream or batch-process scenarios; issue is latent with current file sizes | Files > 10k scenarios |
-| Matplotlib rendering in CI | Tests that import `psai_bench.cli` pull in matplotlib, causing backend errors on headless CI | Set `MPLBACKEND=Agg` in CI environment or use `matplotlib.use('Agg')` before import | Headless Linux CI runners |
+**What goes wrong:** `PROJECT.md` requires "same seed + same params = same scenarios." Any change to generator logic — including new site types, new adversarial scenario types, new category blocklist entries — changes the output for existing seeds. The `test_seed_regression.py` test exists explicitly to catch this.
+
+**Prevention:** v4.0 scenario generation changes (new adversarial behavioral types, new dispatch-relevant metadata) must be gated behind a new `generation_version` value (currently `"v1"`, `"v2"`, `"v3"` in schema.py line 154). Existing scenarios at `generation_version: "v3"` must be unchanged. New v4.0 features generate at `generation_version: "v4"` with a new seed space. Do not mix generation versions in the same scenario set without explicit version-stratified analysis.
 
 ---
 
-## Security Mistakes
+## Minor Pitfalls
 
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| API key in evaluator docstring as `api_key="sk-..."` | Copy-paste accident commits real key | Keep placeholder but add `NEVER pass real keys in code` comment; `.env` already in `.gitignore` |
-| CI workflow with `OPENAI_API_KEY` secret | Secret exposure if workflow is triggered by forked PR | Use `if: github.event_name != 'pull_request_target'` guard; mark evaluator tests as `[skip-ci-api]` |
-| No `SECURITY.md` | Unclear responsible disclosure path for benchmark data poisoning or scoring manipulation issues | Add minimal `SECURITY.md` pointing to maintainer email or GitHub private vulnerability reporting |
+### Pitfall 11: Evaluators Reference 3-Class in Prompt Templates
 
----
+**What goes wrong:** `evaluators.py` line 27 contains the prompt: "Classify the alert as one of: THREAT, SUSPICIOUS, or BENIGN." Line 108 normalizes invalid verdicts to `"SUSPICIOUS"` as default. If v4.0 adds dispatch classes, the evaluator prompts must be updated, and the fallback normalization logic must change or it will silently convert unrecognized dispatch classes into SUSPICIOUS.
 
-## UX Pitfalls
-
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| CLI generates files to `data/generated/` by default but scores expects them at specific paths | First-time user runs `psai-bench score` and gets FileNotFoundError with unhelpful message | Quickstart in README shows generate → score pipeline in exact sequence with copy-pasteable commands |
-| `psai-bench evaluate` requires API keys with no graceful degradation | User without API keys can't explore the benchmark at all | Ensure `psai-bench baselines` and `psai-bench score` work without any API keys; document this clearly |
-| No `--help` output in README | Users don't know what subcommands exist | Add `psai-bench --help` output as a code block near the top of README |
+**Prevention:** Treat `evaluators.py` as a reference implementation, not production code. Any v4.0 dispatch evaluator should be a new file (`evaluators_v4.py`) rather than modifying the existing one, to preserve backward-compatible examples.
 
 ---
 
-## "Looks Done But Isn't" Checklist
+### Pitfall 12: Validation Balance Check Assumes 3 Classes at Minimum 5% Each
 
-- [ ] **LICENSE file:** `license = "Apache-2.0"` in pyproject.toml looks done — verify the actual `LICENSE` file exists at repo root with full Apache 2.0 text
-- [ ] **README:** README.md file exists — verify it contains results table, citation block, and "why this exists" framing, not just usage docs
-- [ ] **Git history:** `data/generated/` removed from `.gitignore` working tree — verify it's also purged from git history (`git cat-file --batch-check --batch-all-objects | grep blob | sort -k3 -n | tail` should show no blobs > 100KB)
-- [ ] **Reproducibility:** `psai-bench generate` command documented — verify the README shows exact flags that produce canonical v1.0 datasets
-- [ ] **CI green:** Workflow file exists — verify first run completes without `FileNotFoundError` on generated data or missing `MPLBACKEND`
-- [ ] **PyPI metadata:** `pip show psai-bench` shows correct name/author/URL — verify after `pip install -e .`, not just by reading pyproject.toml
-- [ ] **Optional deps:** `pip install psai-bench[api]` works — verify `google-genai` package name is current on PyPI
-- [ ] **Results in git:** `results/` is committed — verify decision is deliberate (example outputs) vs. accidental (full eval results); large evaluation JSONs should not be in git
+**What goes wrong:** `validation.py` lines 282–286 iterate over `VERDICTS` and warn if any class appears at less than 5% of scenarios. With 5 dispatch classes as ground truth, the balance check logic is wrong — there are now 5 classes to check, and the thresholds for acceptability may differ per class (armed response should be rare; auto-suppress may dominate).
+
+**Prevention:** Update the balance check before any 5-class scenario generation runs. Otherwise validation will silently pass on badly imbalanced dispatch label distributions.
 
 ---
 
-## Recovery Strategies
+## Phase-Specific Warnings
 
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Large files in git history (not yet public) | LOW | `git filter-repo --path data/generated/ --invert-paths` + force push; 2-commit history makes this fast |
-| Large files in git history (already public, cloned by others) | HIGH | Must notify existing cloners; force-push rewrites their history; coordinate timing or accept the repo size |
-| Wrong numpy version breaks scenario reproducibility | MEDIUM | Pin numpy in pyproject.toml; publish SHA-256 checksums for canonical JSON files in release notes |
-| CI broken on first run | LOW | Fix missing env vars, add generate step, re-push; CI is gated behind branch protection so no users are affected |
-| PyPI upload with wrong metadata | MEDIUM | `pip install psai-bench` will pull wrong version; must yank release on PyPI and re-publish; plan metadata carefully before first PyPI push |
-
----
-
-## Pitfall-to-Phase Mapping
-
-| Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| Large files in git history | Repository Hygiene (Phase 1 — before public push) | `git count-objects -vH` shows pack < 1MB; GitHub repo size < 2MB |
-| Generated data not reproducible | Repository Hygiene + README | `git clone` + README quickstart commands produce matching SHA-256 for canonical files |
-| NumPy RNG version drift | Repository Hygiene + CI | CI matrix tests on pinned numpy version; integration test asserts scenario ID hash |
-| Broken pip install metadata | Project Metadata | `twine check dist/*` passes; PyPI listing shows full README and author |
-| LICENSE file absent | Documentation + Licensing | `ls LICENSE` exists; GitHub sidebar shows "Apache-2.0" |
-| CI broken on first run | CI Setup | First green run on a clean branch with no local state |
-| README explains what not why | Documentation (README) | README opens with research hypothesis and concrete GPT-4o numbers within first 200 words |
-| Results JSON permanence | Repository Hygiene | `git ls-files results/evaluations/` returns empty (or only baseline/example outputs) |
-
----
-
-## Sources
-
-- [git-filter-repo (official git-recommended tool)](https://github.com/newren/git-filter-repo)
-- [NumPy NEP 19 — RNG version stability policy](https://numpy.org/neps/nep-0019-rng-policy.html)
-- [setuptools data files in pyproject.toml](https://setuptools.pypa.io/en/latest/userguide/datafiles.html)
-- [Python Packaging User Guide — writing pyproject.toml](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/)
-- [Common Python packaging mistakes (jwodder.github.io)](https://jwodder.github.io/kbits/posts/pypkg-mistakes/)
-- [Applying the Apache 2.0 license](https://www.apache.org/legal/apply-license.html)
-- [PEP 639 — License metadata in Python packages](https://peps.python.org/pep-0639/)
-- [Python in GitHub Actions (hynek.me)](https://hynek.me/articles/python-github-actions/)
-- Direct repo inspection: `git show --stat 7eda522`, `git ls-files`, `pyproject.toml`, `.gitignore`, `psai_bench/evaluators.py`
-
----
-*Pitfalls research for: open-source release of existing Python ML benchmark (PSAI-Bench)*
-*Researched: 2026-04-12*
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|---------------|------------|
+| 5-class output schema | `VERDICTS` viral change breaks 6 consumers simultaneously | Map all imports before any change; additive `dispatch` field preferred over replacing `verdict` |
+| Metric re-derivation | TDR/FASR/Decisiveness are undefined in 5-class space | Write new definitions on paper before touching ScoreReport |
+| Confusion matrix extension | Hardcoded 3x3 at scorer.py:502 breaks tests and dashboard | Define matrix shape (3×5 vs 5×5) before implementation |
+| Cost model | Single cost number is non-reproducible and cherry-pickable | Report at multiple cost ratio assumptions; record params in output |
+| Multi-site split construction | Site-type identity leaks through category distributions and zone vocabulary | Audit feature-site correlations; verify with site-type classifier probe |
+| Adversarial scenario generation | v4.0 behavioral adversarial conflates with v2.0 signal-conflict adversarial flag | Add `adversarial_type` field; report metrics split by type |
+| Seed regression | Generator logic changes break `test_seed_regression.py` | Gate all v4.0 generation under `generation_version: "v4"` |
+| Backward compatibility | 3-class users break if `verdict` enum changes | Require `verdict` unchanged; `dispatch` is new optional field |

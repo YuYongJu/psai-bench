@@ -1,168 +1,196 @@
-# Feature Research
+# Feature Landscape
 
-**Domain:** Open-source ML benchmark release artifacts
-**Researched:** 2026-04-12
-**Confidence:** HIGH
-
-## Framing Note
-
-The benchmark core (CLI, scorer, generators, evaluators) is complete at v1.0rc1. Every "feature" here is a **release artifact** — documentation, metadata, and presentation scaffolding needed to publish PSAI-Bench as a credible open-source benchmark. None of these involve writing new benchmark logic.
+**Domain:** Physical security AI benchmark — operational decision-support evaluation
+**Researched:** 2026-04-13
+**Milestone scope:** v4.0 (5-class dispatch, cost-aware scoring, multi-site generalization, adversarial robustness)
 
 ---
 
-## Feature Landscape
+## Framing: The Critical Design Decision
 
-### Table Stakes (Users Expect These)
+Before feature classification, one unresolved design question dominates v4.0:
 
-Features that every successful benchmark includes. Missing any of these makes the project feel unfinished to researchers evaluating whether to cite or extend it.
+**Are dispatch classes a replacement for the triage classification, or a second layer on top of it?**
+
+VISION.md describes 5 dispatch actions (armed response, patrol, operator review, auto-suppress, request data). The current OUTPUT_SCHEMA has `verdict: THREAT | SUSPICIOUS | BENIGN`. These are conceptually different: one is a classification of the event, the other is an operational response decision.
+
+**Option A — Two-layer:** Keep verdict (THREAT/SUSPICIOUS/BENIGN), add required `dispatch_action` field. Verdict explains what happened; dispatch_action says what to do. Backward compatible: old systems produce verdict only.
+
+**Option B — Replace:** verdict becomes the 5-class dispatch label. Simpler schema, but breaks backward compatibility and loses the perception-vs-response distinction.
+
+The research supports Option A. Real GSOCs make two decisions: (1) what is this? (2) what do I do about it? These aren't the same question. A THREAT in a parking lot warrants patrol; a THREAT in a restricted zone warrants armed response. The dispatch decision depends on threat classification AND site context. Option A preserves this distinction and maintains backward compatibility.
+
+**This must be resolved before building v4.0 schema, scoring, or CLI.**
+
+---
+
+## Table Stakes
+
+Features that a benchmark claiming "operational realism" cannot omit.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| README results table | MMLU, MLE-bench, BIG-bench all embed model scores directly; first thing researchers look for | LOW | Gates on `results/` decision — commit GPT-4o UCF metadata run as example output |
-| BibTeX citation block | Universally present in every benchmark examined (HumanEval, SWE-bench, MMLU, MTEB, BIG-bench, MLE-bench); absence signals "not citable" | LOW | Single arXiv-style BibTeX entry; no paper yet so cite GitHub repo + year |
-| pip install + one-command quickstart | SWE-bench, HumanEval, MTEB all start with install + minimal usage example; researchers test locally before reading further | LOW | `pip install psai-bench` then `psai-bench generate --scenario ucf --n 50` |
-| LICENSE file | Apache-2.0 already declared in pyproject.toml; not having the actual file is a red flag for enterprise users | LOW | File needs to exist at repo root; decision already made |
-| Shields.io badges (3 max) | Python version, CI status, License — the standard triad for Python tools; more than 3 is noise | LOW | `python-3.10+`, `tests passing`, `Apache-2.0` |
-| CONTRIBUTING.md | SWE-bench and MTEB both reference it; tells researchers how to submit new evaluations or extend scenarios | LOW | Short file: how to run tests, how to add a model evaluator, issue templates |
-| CODE_OF_CONDUCT.md | Standard for credible OSS; GitHub prompts for it; trivial to add | LOW | Use Contributor Covenant boilerplate verbatim |
-| Example output files in repo | HumanEval provides `example_problem.jsonl` and `example_solutions.jsonl`; users need to see expected format before running | LOW | The existing `results/evaluations/gpt-4o_ucf_metadata_run1.json` serves this purpose directly |
-| CHANGELOG.md | Signals version maturity for a v1.0 release; researchers need to know what changed between versions | LOW | Single entry for v1.0.0; establish format for future versions |
-| GitHub Actions CI badge (tests + lint) | Researchers checking if a benchmark is maintained look for green CI; absence raises reliability questions | MEDIUM | pytest + ruff via Actions; generates the CI badge |
-| Clean .gitignore (generated data excluded) | 16MB generated JSON bloats the repo; reproducible-by-seed means data shouldn't be committed | LOW | Add `data/` and generated scenario files; keep `results/` as example outputs |
-| Reproducible generate command with seed | Users must be able to regenerate the exact benchmark scenarios that produced the published results | LOW | Already implemented; needs to be prominently documented in README |
+| Cost-sensitive scoring framework | Field standard — accuracy-only is insufficient for asymmetric-cost domains (missed threat >> false dispatch) | Medium | Well-established theory (cost matrix, expected total cost — PMC5217743). Dollar amounts in VISION.md are assumptions, not industry data — mark as provisional. |
+| Adversarial robustness test scenarios | Any "AI security" claim requires robustness characterization; NIST AI 100-2e2025 covers taxonomy | Low (scenarios already partially exist) | v2.0 has ~20% adversarial injection; v4.0 expands to semantic-level adversarials (distinct from pixel-perturbation literature) |
+| Per-action breakdown in results | Without separating dispatch classes, the score is uninterpretable for operators | Low | Same philosophy as v2.0's separate metric dashboard |
+| Updated output schema | Any new dispatch output field needs schema validation and docs | Low | Must preserve backward compat (v1.0 verdict-only still valid) |
 
-### Differentiators (Competitive Advantage)
+## Differentiators
 
-Features that distinguish PSAI-Bench from generic LLM benchmarks and support the core research claim.
+Features that would distinguish PSAI-Bench from any existing benchmark.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Pre-computed results in repo (`results/`) | Most benchmarks make users run everything themselves (SWE-bench, MMLU); having a real GPT-4o result immediately demonstrates the tool works and provides a comparison anchor | LOW | Commit `results/evaluations/` and `results/baselines/`; document as "example outputs" |
-| Perception-reasoning gap analysis prominently surfaced | The unique research contribution — measuring whether video data actually changes model decisions vs. metadata-only reasoning; no other physical security benchmark does this | LOW | README "Key Findings" section with a concrete gap metric from the GPT-4o run |
-| Safety-weighted metrics explained in README | TDR/FASR/ECE have non-obvious security domain meanings; explaining the weighting rationale (false negatives cost more than false positives in security) differentiates from generic F1/accuracy tables | LOW | 3-4 sentence methodology note in README, full details in architecture section |
-| Three scenario tracks documented (metadata, visual, multi-sensor) | Explicitly showing the three difficulty tiers helps researchers understand the research design at a glance | LOW | Comparison table in README: track → input modality → what it tests |
-| Real dataset provenance (UCF Crime, Caltech Pedestrian) | Links to data sources and explains the grounding in real incident data — distinguishes from synthetic-only benchmarks | LOW | Dataset section in README with HuggingFace and citation links |
+| 5-class dispatch output evaluation | No existing benchmark evaluates operational dispatch decisions — CyberSOCEval (MCQ accuracy), ExCyTIn-Bench (multistep agent tasks), NIST frameworks (capability maturity) — all classify or reason, none score a dispatch action | Medium | Requires new GT mapping: what is the "correct" dispatch for each scenario? |
+| Dispatch-conditioned cost model | Expected operational cost scoring ties benchmark results directly to dollars, the language of security operations buyers | Medium | Cost matrix structure is established (ordinal cost via linear absolute loss); dollar values need domain validation |
+| Multi-site generalization testing | Equivalent to leave-one-domain-out in domain generalization literature; site types (solar/substation/commercial/campus) are the "domains" | High | Novel because: (a) site-specific GT already exists in schema, (b) no benchmark does this for physical security, (c) methodologically grounded in CVPR 2024 "Rethinking Evaluation Protocol" |
+| Semantic adversarial scenarios | Distinct from pixel-perturbation adversarial ML — context signal manipulation (authorized access presenting as intrusion) is "natural adversarial" and directly attacks the multi-signal reasoning the benchmark tests | Medium | Positions PSAI-Bench in natural adversarial examples literature, not input perturbation literature |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+## Anti-Features
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Jupyter notebook quickstart | BIG-bench and MTEB use them; users may expect interactive tutorials | BIG-bench is a 200+ contributor project with dedicated infra; a notebook for a CLI tool adds maintenance burden without proportional value; notebooks go stale | Good README with copy-pasteable CLI commands is faster for users and zero maintenance |
-| HuggingFace Spaces / web leaderboard | MTEB directs to HF Spaces; looks polished | Requires separate infrastructure, ongoing hosting, and maintenance; PROJECT.md explicitly says CLI-first; single GPT-4o result doesn't justify a leaderboard | Results table in README; add HF Spaces after more model evaluations exist |
-| Docker evaluation environment | SWE-bench and MLE-bench use Docker | Those benchmarks execute untrusted model-generated code that must be sandboxed; PSAI-Bench passes prompts to API endpoints — no sandboxing needed; Docker adds setup friction | Simple `pip install` with optional API key configuration |
-| Model comparison matrix across all providers | Seems like a natural benchmark output | Only GPT-4o UCF metadata has been evaluated; a sparse comparison table (one model, one track) looks weaker than no table; fabricating results is a research integrity issue | Show GPT-4o vs baselines for the one completed evaluation; add columns as evaluations are run |
-| Automated leaderboard via PR submission | SWE-bench accepts community result submissions | Requires review process, validation infrastructure, and ongoing maintenance; wrong for v1.0 with one author | Accept result submissions as issues or PRs with raw JSON; manually curate |
+Features to explicitly not build.
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| Single aggregate dispatch score | Hides which dispatch class is failing; a system that never calls armed response scores identically to one that always calls it — one hides threats, one bankrupts the client | Report per-class precision/recall + expected cost separately |
+| Cost model with hardcoded dollar amounts | $200-500 armed response, $5-15 operator review (VISION.md) are plausible but uncited assumptions; locking them in creates wrong baselines | Make cost values configurable parameters with documented defaults and a --cost-profile flag |
+| Collapsing dispatch into 3-class GT | Mapping armed_response→THREAT, patrol→SUSPICIOUS, auto_suppress→BENIGN loses the operational nuance (a patrol-to-restricted-zone is not the same as a SUSPICIOUS verdict) | Keep dispatch GT as its own 5-class taxonomy |
+| Adversarial scenarios that require video processing | v4.0 semantic adversarials are context-signal-level, not pixel-level — building video perturbation attacks is out of scope and out of domain | Stay in the textual/metadata adversarial space |
+| Training the benchmark on a single site, testing on the same | This is the status quo and what generalization testing is meant to challenge | Require hold-out site evaluation in the multi-site protocol |
+
+---
+
+## Feature Details by Area
+
+### 1. Five-Class Dispatch Decisions
+
+**What industry does:** Real GSOCs (HiveWatch, VectorFlow, similar) use AI to route alerts to action tiers. The typical taxonomy confirmed in industry sources: armed/law enforcement dispatch (highest urgency, highest cost), security patrol dispatch (medium urgency), operator review queue (human-in-loop), auto-suppress/resolve (verified benign), and request additional data (pan camera, check adjacent feeds). This is not a benchmark invention — it reflects actual GSOC decision flow.
+
+**Ground truth challenge:** Dispatch GT requires a documented decision function that combines verdict with site context. The same THREAT verdict at a solar perimeter → patrol; at a substation control room → armed response. The decision function must be published and auditable, consistent with v2.0 philosophy.
+
+**Output schema impact:**
+- Add `dispatch_action: "ARMED_RESPONSE" | "PATROL" | "OPERATOR_REVIEW" | "AUTO_SUPPRESS" | "REQUEST_DATA"` (required for v4.0 systems)
+- Keep `verdict: THREAT | SUSPICIOUS | BENIGN` (required for all; backward compat)
+- v1.0/v2.0/v3.0 outputs remain valid — scoring dispatches only when dispatch_action present
+
+**Ordinal structure:** Dispatch classes have a natural partial ordering by urgency and cost: ARMED_RESPONSE > PATROL > OPERATOR_REVIEW > AUTO_SUPPRESS, with REQUEST_DATA orthogonal (it's a data-gathering action, not a threat-response action). This partial order should inform the cost matrix design.
+
+### 2. Cost-Aware Scoring
+
+**Mathematical framework (HIGH confidence):** The ordinal cost-sensitive literature (PMC5217743) provides the standard approach:
+
+- Cost matrix C where C[i][j] = cost of predicting class j when true class is i
+- Total classification cost TC = trace(C × F^T) where F is the confusion matrix
+- For ordinal classes, off-diagonal entries scale with distance: C[i][j] ∝ |j - i|
+
+**For dispatch-specific costs:** The cost asymmetry is extreme and non-symmetric:
+- False ARMED_RESPONSE: ~$200-500 per dispatch (VISION.md estimate — needs validation)
+- Missed ARMED_RESPONSE when needed: catastrophic (life-safety or major loss)
+- OPERATOR_REVIEW when AUTO_SUPPRESS correct: ~$5-15 operator time
+- AUTO_SUPPRESS when OPERATOR_REVIEW needed: missed review opportunity (lower stakes)
+
+**Implementation approach:** Expected Operational Cost (EOC) metric:
+```
+EOC = sum over all scenarios: cost_matrix[true_dispatch][predicted_dispatch] / N
+```
+Report EOC alongside per-class precision/recall. Do not fold EOC into a single aggregate.
+
+**Cost profile configurability:** Users need to plug in their own cost assumptions. A `--cost-profile` option with a JSON cost matrix + a documented default profile that matches VISION.md's estimates. This is table stakes for the feature to be useful — a solar farm and a hospital have different cost structures.
+
+### 3. Multi-Site Generalization Testing
+
+**Domain generalization framing (HIGH confidence):** This maps directly to leave-one-domain-out (LODO) evaluation from the domain generalization literature. Site types = domains. Evaluation protocol: generate scenarios across N site types, hold out one site type, measure performance on the held-out site.
+
+**What the CVPR 2024 "Rethinking Evaluation Protocol" finding means for PSAI-Bench:** Validation data must come from the training distribution, not the test domain. For PSAI-Bench: any prompt tuning or system calibration a user does cannot use held-out-site scenarios. The evaluation protocol document must specify this constraint.
+
+**Site types in existing schema:** `site_type` field already exists in schema.py with enum ["solar", "substation", "commercial", "industrial", "campus"]. This is the domain taxonomy to use.
+
+**Generalization Gap metric:** GG = performance_on_trained_sites - performance_on_held_out_site. Report per site type, not just aggregate. A system that collapses on commercial sites but excels at solar is a different risk profile than one that degrades uniformly.
+
+**GT implications:** Some adversarial scenarios are site-specific by design (solar-specific wildlife, substation-specific environmental). GT distribution will differ across site types — this is expected and should be documented.
+
+### 4. Adversarial Robustness
+
+**PSAI-Bench adversarials are semantic, not pixel-perturbation (HIGH confidence):** The adversarial ML literature (NIST AI 100-2e2025, springer reviews) focuses on input perturbations, adversarial patches, and prompt injection. PSAI-Bench v4.0 adversarials are fundamentally different — they are "natural adversarial examples" where context signals are internally consistent but designed to produce a counterintuitive ground truth.
+
+**Four semantic adversarial categories for v4.0:**
+1. **Authorized-as-intrusion:** Person near restricted zone with expired badge credential, recent zone activity logged. Looks like authorized maintenance; GT = THREAT (badge expired, no active maintenance scheduled).
+2. **Loitering-as-authorized-waiting:** Person stationary near entrance for 15 min, during business hours, no badge event. Looks threatening; GT = BENIGN (scheduled delivery pickup, expected_activities includes it).
+3. **Environmental-as-human:** PIR trigger + camera detects moving object + thermal shows heat signature. Looks like THREAT; GT = BENIGN (confirmed via adjacent camera: HVAC exhaust duct).
+4. **Social engineering pattern:** Sequential badge attempts across multiple entry points across 20 min. Multi-alert temporal pattern; GT = THREAT. Requires sequence track to express properly.
+
+**Distinction from v2.0 adversarials:** v2.0 adversarials are signal-level conflicts (HIGH severity + BENIGN GT). v4.0 adversarials are scenario-level: the signals are consistent, but the correct reasoning requires domain knowledge that naive pattern-matching misses. This is the harder and more interesting case.
+
+**Robustness metric:** Adversarial Accuracy Drop (AAD) = accuracy_on_standard - accuracy_on_adversarial_subset. Report separately from overall metrics. A system with low AAD has robust reasoning; high AAD means it's pattern-matching on surface features.
 
 ---
 
 ## Feature Dependencies
 
 ```
-CI (GitHub Actions)
-    └──generates──> CI badge in README
+dispatch_action field → updated output schema
+updated output schema → updated validation
+updated output schema → updated CLI score command
+cost-aware scoring → dispatch_action field (needs dispatch GT)
+cost-aware scoring → cost matrix configuration
+cost-aware scoring → Expected Operational Cost metric
 
-results/ in repo (committed)
-    └──enables──> Results table in README
-    └──enables──> Pre-computed results differentiator
-    └──enables──> Perception-reasoning gap example in README
+multi-site generalization → site_type in scenarios (already exists)
+multi-site generalization → updated evaluation protocol document
+multi-site generalization → new CLI flag or sub-command for hold-out evaluation
 
-LICENSE file
-    └──required for──> License badge
-
-pyproject.toml metadata (authors, URLs)
-    └──required for──> PyPI version badge (if published)
-    └──required for──> Proper citation block
-
-.gitignore (data/ excluded)
-    └──depends on──> Reproducible seed generate command documented
+adversarial scenarios → scenario generation updates
+adversarial scenarios → updated _meta schema (adversarial_type field)
+adversarial scenarios → Adversarial Accuracy Drop metric
 ```
 
-### Dependency Notes
+---
 
-- **results/ commit decision gates README content:** The PROJECT.md marks this as a pending key decision. If `results/` is excluded from git, the results table in README requires fetching and documenting results elsewhere. Resolve this first — the recommendation is to keep `results/` as example outputs (the data is small, ~16MB, and has research value).
-- **CI badge requires Actions to pass:** The 12 ruff lint errors and CLI/statistics test gaps must be fixed before the CI badge shows green. Badge before CI is a credibility risk.
-- **Citation block does not require a paper:** Cite the GitHub repo with a year. BibTeX can reference a `misc` type with `howpublished = {\url{...}}`. This is standard for software without a published paper.
+## MVP Recommendation for v4.0
+
+**Build first (blocks everything else):**
+1. Resolve two-layer vs. replace design decision — write decision record before touching schema
+2. Update OUTPUT_SCHEMA with dispatch_action (backward compatible)
+3. Update _META_SCHEMA with dispatch_gt and adversarial_type fields
+4. Define dispatch GT decision function and document it
+
+**Build second (core value):**
+5. Cost matrix framework with configurable cost profiles
+6. Expected Operational Cost metric + per-class dispatch breakdown
+7. Expand adversarial scenario generation with v4.0 semantic categories
+8. Adversarial Accuracy Drop metric
+
+**Build third (differentiator):**
+9. Multi-site generalization evaluation protocol and CLI
+10. Generalization Gap metric per site type
+11. Updated evaluation protocol document covering all four v4.0 additions
+
+**Defer:**
+- Video-based adversarial scenarios (out of scope per VISION.md, too complex)
+- Automated cost profile inference (user provides cost matrix; benchmark doesn't guess it)
+- Multi-site scenario rebalancing (ensure site type distribution is documented, not forced-equal)
 
 ---
 
-## MVP Definition
+## Confidence Assessment
 
-### Launch With (v1.0 Release)
-
-The minimum needed to publish on GitHub and present on LinkedIn as credible benchmark infrastructure.
-
-- [ ] README with: badges, quickstart (install + generate + score), scenario track table, results table (GPT-4o vs baselines), methodology note (safety weighting), dataset provenance, citation block — **the single highest-value artifact**
-- [ ] LICENSE file (Apache-2.0) — **required for any OSS claim**
-- [ ] CONTRIBUTING.md — short, tells researchers how to add model evaluators
-- [ ] CODE_OF_CONDUCT.md — boilerplate, required for GitHub community profile
-- [ ] GitHub Actions CI (test + lint) — green badge signals maintained project
-- [ ] Lint clean (12 ruff errors fixed) — required for CI to pass
-- [ ] .gitignore updated (generated data excluded, results/ kept) — repo hygiene
-- [ ] CHANGELOG.md with v1.0.0 entry — signals version maturity
-- [ ] pyproject.toml metadata complete (authors, URLs, classifiers) — required for proper citation and PyPI readiness
-- [ ] Version bumped to 1.0.0 — signals stability to researchers
-
-### Add After Validation (v1.x)
-
-- [ ] Expanded test coverage (CLI tests, statistics tests) — add once CI baseline is green; currently 47% coverage
-- [ ] Additional model evaluations (Claude, Gemini) — needed before a multi-column comparison table is credible
-- [ ] HuggingFace dataset card — when multiple evaluations justify a proper leaderboard
-
-### Future Consideration (v2+)
-
-- [ ] HuggingFace Spaces leaderboard — only justified with 5+ model evaluations
-- [ ] Jupyter notebook tutorial — only if user requests emerge or adoption warrants it
-- [ ] Visual track model evaluations — out of scope for v1.0, requires video processing infrastructure
-
----
-
-## Feature Prioritization Matrix
-
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| README (results, quickstart, citation) | HIGH | LOW | P1 |
-| LICENSE file | HIGH | LOW | P1 |
-| GitHub Actions CI | HIGH | MEDIUM | P1 |
-| Lint clean | HIGH | LOW | P1 (gates CI) |
-| Shields.io badges | HIGH | LOW | P1 (gates on CI passing) |
-| .gitignore cleanup | MEDIUM | LOW | P1 |
-| CONTRIBUTING.md | MEDIUM | LOW | P1 |
-| CODE_OF_CONDUCT.md | LOW | LOW | P1 (trivial, expected) |
-| CHANGELOG.md | MEDIUM | LOW | P1 |
-| pyproject.toml metadata | MEDIUM | LOW | P1 |
-| Expanded test coverage | MEDIUM | MEDIUM | P2 |
-| Additional model evaluations | HIGH | HIGH (API cost) | P3 |
-| HuggingFace Spaces leaderboard | MEDIUM | HIGH | P3 |
-
----
-
-## Competitor / Comparator Analysis
-
-| Feature | HumanEval | SWE-bench | MMLU | BIG-bench | MLE-bench | PSAI-Bench Plan |
-|---------|-----------|-----------|------|-----------|-----------|-----------------|
-| Results table in README | No | Leaderboard | Yes (in README) | Plot image | Yes (in README) | Yes — GPT-4o vs 4 baselines |
-| BibTeX citation | Yes | Yes (3 entries) | Yes | Yes | Yes | Yes — single entry |
-| Quickstart (install + run) | Yes | Yes | Minimal | Yes | Yes | Yes — install + generate + score |
-| Badges | None | Python, License, PyPI | None | None | None | CI, Python, License |
-| CONTRIBUTING.md | No | Yes | No | Yes | No | Yes |
-| Example output files | Yes (.jsonl) | No | No | Yes (via Colab) | No | Yes (results/evaluations/) |
-| Jupyter notebooks | No | No | No | Yes (Colab) | No | No — CLI-first |
-| Docker requirement | No | Yes | No | No | Yes | No — unnecessary |
-| Pre-committed result examples | No | No | No | No | No | Yes — differentiator |
+| Area | Confidence | Notes |
+|------|------------|-------|
+| 5-class dispatch taxonomy | HIGH | Confirmed against GSOC industry sources (HiveWatch, SIA) |
+| Cost matrix math framework | HIGH | PMC5217743, well-established ordinal classification literature |
+| Dollar cost estimates | LOW | VISION.md figures are plausible assumptions, not sourced from industry data |
+| Multi-site generalization methodology | HIGH | Direct mapping to domain generalization literature (LODO evaluation); CVPR 2024 evaluation protocol paper |
+| Adversarial scenario classification | HIGH | NIST AI 100-2e2025 confirms semantic adversarials are distinct from perturbation attacks |
+| No existing benchmark has 5-class dispatch evaluation | HIGH | CyberSOCEval (MCQ), ExCyTIn-Bench (agent tasks), SandboxAQ (maturity model) — none score operational dispatch actions |
 
 ---
 
 ## Sources
 
-- HumanEval (openai/human-eval): https://github.com/openai/human-eval — badge absence, citation format, example jsonl pattern
-- SWE-bench (swe-bench/SWE-bench): https://github.com/swe-bench/SWE-bench — badge triad (Python/License/PyPI), multiple citation entries, Docker overhead
-- MMLU (hendrycks/test): https://github.com/hendrycks/test — results table directly in README, two-entry citation pattern
-- BIG-bench (google/BIG-bench): https://github.com/google/BIG-bench — Colab notebooks, leaderboard plot, CONTRIBUTING patterns
-- MLE-bench (openai/mle-bench): https://github.com/openai/mle-bench — performance table format with multiple columns, authors section
-- MTEB (embeddings-benchmark/mteb): https://github.com/embeddings-benchmark/mteb — 3-badge pattern, Apache-2.0, leaderboard-as-HF-Spaces pattern
-- Shields.io: https://shields.io/ — badge implementation reference
-- daily.dev badge best practices: https://daily.dev/blog/readme-badges-github-best-practices — "3 max, stick to what's truthful"
-
----
-*Feature research for: open-source ML benchmark release*
-*Researched: 2026-04-12*
+- PMC5217743: Cost-Sensitive Performance Metric for Comparing Multiple Ordinal Classifiers — https://pmc.ncbi.nlm.nih.gov/articles/PMC5217743/
+- NIST AI 100-2e2025: Adversarial Machine Learning Taxonomy — https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-2e2025.pdf
+- CyberSOCEval (CrowdStrike + Meta, Sep 2025) — https://arxiv.org/html/2509.20166v2
+- Cost-Sensitive Evaluation for Binary Classifiers (arXiv 2510.22016) — https://arxiv.org/abs/2510.22016
+- CVPR 2024 "Rethinking the Evaluation Protocol of Domain Generalization" — https://openaccess.thecvf.com/content/CVPR2024/papers/Yu_Rethinking_the_Evaluation_Protocol_of_Domain_Generalization_CVPR_2024_paper.pdf
+- SIA "Transforming Physical Security: How AI is Changing the GSOC" (Mar 2025) — https://www.securityindustry.org/2025/03/03/transforming-physical-security-how-ai-is-changing-the-gsoc/
+- HiveWatch GSOC OS — https://hivewatch.com/gsoc-operating-system/

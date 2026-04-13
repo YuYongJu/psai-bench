@@ -23,12 +23,21 @@ def main():
 
 
 @main.command()
-@click.option("--track", type=click.Choice(["metadata", "visual", "multi_sensor"]), required=True)
+@click.option(
+    "--track",
+    type=click.Choice([
+        "metadata", "visual", "multi_sensor",
+        "visual_only", "visual_contradictory", "temporal",
+    ]),
+    required=True,
+)
 @click.option("--source", type=click.Choice(["ucf", "caltech", "all"]), default="all")
 @click.option("--n", type=int, default=None, help="Number of scenarios (default: spec-defined)")
 @click.option("--seed", type=int, default=42)
 @click.option("--output", type=click.Path(), default="data/generated")
-def generate(track: str, source: str, n: int | None, seed: int, output: str):
+@click.option("--version", "gen_version", type=click.Choice(["v1", "v2"]), default="v1",
+              help="Scenario generation version. v2 uses context-dependent GT (PSAI-Bench v2.0).")
+def generate(track: str, source: str, n: int | None, seed: int, output: str, gen_version: str):
     """Generate evaluation scenarios."""
     from psai_bench.generators import MetadataGenerator, MultiSensorGenerator, VisualGenerator
 
@@ -36,7 +45,7 @@ def generate(track: str, source: str, n: int | None, seed: int, output: str):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if track == "metadata":
-        gen = MetadataGenerator(seed=seed)
+        gen = MetadataGenerator(seed=seed, version=gen_version)
         scenarios = []
         if source in ("ucf", "all"):
             count = n or 3000
@@ -48,7 +57,7 @@ def generate(track: str, source: str, n: int | None, seed: int, output: str):
             click.echo(f"Generated {count} Caltech metadata scenarios")
 
     elif track == "visual":
-        gen = VisualGenerator(seed=seed)
+        gen = VisualGenerator(seed=seed, version=gen_version)
         scenarios = []
         if source in ("ucf", "all"):
             count = n or 3000
@@ -60,12 +69,29 @@ def generate(track: str, source: str, n: int | None, seed: int, output: str):
             click.echo(f"Generated {count} Caltech visual scenarios")
 
     elif track == "multi_sensor":
-        gen = MultiSensorGenerator(seed=seed)
+        gen = MultiSensorGenerator(seed=seed, version=gen_version)
         count = n or 1000
         scenarios = gen.generate(count)
         click.echo(f"Generated {count} multi-sensor scenarios")
 
-    out_file = out_dir / f"{track}_{source}_seed{seed}.json"
+    elif track == "visual_only":
+        from psai_bench.generators import VisualOnlyGenerator
+        count = n or 500
+        scenarios = VisualOnlyGenerator(seed=seed).generate(count)
+        click.echo(f"Generated {count} visual-only scenarios")
+    elif track == "visual_contradictory":
+        from psai_bench.generators import ContradictoryGenerator
+        count = n or 500
+        scenarios = ContradictoryGenerator(seed=seed).generate(count)
+        click.echo(f"Generated {count} visual-contradictory scenarios")
+    elif track == "temporal":
+        from psai_bench.generators import TemporalSequenceGenerator
+        count = n or 50
+        scenarios = TemporalSequenceGenerator(seed=seed).generate(count)
+        click.echo(f"Generated {count} temporal sequences ({len(scenarios)} total alerts)")
+
+    version_suffix = f"_{gen_version}" if gen_version != "v1" else ""
+    out_file = out_dir / f"{track}_{source}_seed{seed}{version_suffix}.json"
     with open(out_file, "w") as f:
         json.dump(scenarios, f, indent=2)
     click.echo(f"Saved to {out_file}")
@@ -96,56 +122,8 @@ def score(scenarios: str, outputs: str, fmt: str):
     if fmt == "json":
         click.echo(json.dumps(report.to_dict(), indent=2))
     else:
-        _print_report_table(report)
-
-
-def _print_report_table(report):
-    """Pretty-print a score report."""
-    from tabulate import tabulate
-
-    primary = [
-        ["Threat Detection Rate (TDR)", f"{report.tdr:.4f}"],
-        ["False Alarm Suppression (FASR)", f"{report.fasr:.4f}"],
-        ["3-Class Accuracy", f"{report.accuracy:.4f}"],
-        ["Safety Score (1:1)", f"{report.safety_score_1_1:.4f}"],
-        ["Safety Score (3:1)", f"{report.safety_score_3_1:.4f}"],
-        ["Safety Score (10:1)", f"{report.safety_score_10_1:.4f}"],
-    ]
-    click.echo("\n=== Primary Metrics ===")
-    click.echo(tabulate(primary, headers=["Metric", "Value"], tablefmt="simple"))
-
-    calibration = [
-        ["ECE", f"{report.ece:.4f}"],
-        ["Brier Score", f"{report.brier_score:.4f}"],
-        ["Overconfidence Rate", f"{report.overconfidence_rate:.4f}"],
-    ]
-    click.echo("\n=== Calibration ===")
-    click.echo(tabulate(calibration, headers=["Metric", "Value"], tablefmt="simple"))
-
-    secondary = [
-        ["SUSPICIOUS Fraction", f"{report.suspicious_fraction:.4f}"],
-        ["SUSPICIOUS Penalty", f"{report.suspicious_penalty:.4f}"],
-        ["Calibration Factor", f"{report.calibration_factor:.4f}"],
-        ["Aggregate Score", f"{report.aggregate_score:.4f}"],
-    ]
-    click.echo("\n=== Aggregate ===")
-    click.echo(tabulate(secondary, headers=["Metric", "Value"], tablefmt="simple"))
-
-    difficulty = [
-        ["Easy", f"{report.accuracy_easy:.4f}", f"{report.safety_score_easy:.4f}"],
-        ["Medium", f"{report.accuracy_medium:.4f}", f"{report.safety_score_medium:.4f}"],
-        ["Hard", f"{report.accuracy_hard:.4f}", f"{report.safety_score_hard:.4f}"],
-    ]
-    click.echo("\n=== Per-Difficulty ===")
-    click.echo(tabulate(difficulty, headers=["Difficulty", "Accuracy", "Safety Score"], tablefmt="simple"))
-
-    if report.per_dataset_accuracy:
-        ds = [[k, f"{v:.4f}"] for k, v in report.per_dataset_accuracy.items()]
-        ds.append(["Generalization Gap", f"{report.generalization_gap:.4f}"])
-        click.echo("\n=== Cross-Dataset ===")
-        click.echo(tabulate(ds, headers=["Dataset", "Accuracy"], tablefmt="simple"))
-
-    click.echo(f"\nN={report.n_scenarios} (Threats={report.n_threats}, Benign={report.n_benign})")
+        from psai_bench.scorer import format_dashboard
+        click.echo(format_dashboard(report))
 
 
 @main.command()
@@ -184,79 +162,16 @@ def baselines(scenarios: str, output: str):
         with open(out_file, "w") as f:
             json.dump(outputs, f, indent=2)
 
+        from psai_bench.scorer import format_dashboard
         click.echo(f"\n{'='*60}")
         click.echo(f"  {name.upper()} BASELINE")
         click.echo(f"{'='*60}")
-        _print_report_table(report)
+        click.echo(format_dashboard(report))
 
     # Save summary
     with open(out_dir / "baseline_summary.json", "w") as f:
         json.dump(results, f, indent=2)
     click.echo(f"\nAll baseline results saved to {out_dir}/")
-
-
-@main.command()
-@click.option("--scenarios", type=click.Path(exists=True), required=True)
-@click.option("--output", type=click.Path(), default="results/suspicious_analysis.json")
-def analyze_suspicious_cap(scenarios: str, output: str):
-    """Run sensitivity analysis on the SUSPICIOUS cap threshold.
-
-    Simulates system behavior at different SUSPICIOUS usage rates
-    to empirically justify the 30% cap. Produces data for Section 4.5.
-    """
-    from psai_bench.scorer import score_run
-
-    with open(scenarios) as f:
-        scenario_data = json.load(f)
-
-    rng = np.random.RandomState(42)
-    thresholds = [0.0, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.80, 1.0]
-    results = []
-
-    for target_susp_rate in thresholds:
-        # Simulate a system that uses SUSPICIOUS at the target rate
-        outputs = []
-        for s in scenario_data:
-            gt = s["_meta"]["ground_truth"]
-            if rng.random() < target_susp_rate:
-                verdict = "SUSPICIOUS"
-            else:
-                # When not saying SUSPICIOUS, be 75% accurate on remaining predictions
-                if rng.random() < 0.75:
-                    verdict = gt
-                else:
-                    others = [v for v in ["THREAT", "SUSPICIOUS", "BENIGN"] if v != gt]
-                    verdict = rng.choice(others)
-            outputs.append({
-                "alert_id": s["alert_id"],
-                "verdict": verdict,
-                "confidence": round(float(rng.uniform(0.4, 0.9)), 2),
-                "reasoning": "Simulated system for SUSPICIOUS cap analysis.",
-                "processing_time_ms": 100,
-            })
-
-        report = score_run(scenario_data, outputs)
-        results.append({
-            "target_suspicious_rate": target_susp_rate,
-            "actual_suspicious_fraction": report.suspicious_fraction,
-            "accuracy": report.accuracy,
-            "tdr": report.tdr,
-            "fasr": report.fasr,
-            "safety_score_3_1": report.safety_score_3_1,
-            "suspicious_penalty": report.suspicious_penalty,
-            "aggregate_score": report.aggregate_score,
-        })
-        click.echo(
-            f"SUSP={target_susp_rate:.0%}: "
-            f"Acc={report.accuracy:.3f} TDR={report.tdr:.3f} "
-            f"SS={report.safety_score_3_1:.3f} Agg={report.aggregate_score:.3f}"
-        )
-
-    out_path = Path(output)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w") as f:
-        json.dump(results, f, indent=2)
-    click.echo(f"\nSaved to {out_path}")
 
 
 @main.command()
@@ -583,6 +498,93 @@ def analyze_gap(results_dir: str, scenarios: str, output: str):
     with open(out_path, "w") as f:
         json.dump(analysis, f, indent=2)
     click.echo(f"\nAnalysis saved to {out_path}")
+
+
+@main.command()
+@click.option("--scenarios", type=click.Path(exists=True), required=True,
+              help="Temporal scenario file (output of generate --track temporal).")
+@click.option("--outputs", type=click.Path(exists=True), required=True,
+              help="System outputs file (alert_id -> verdict).")
+@click.option("--format", "fmt", type=click.Choice(["table", "json"]), default="table")
+def score_sequences_cmd(scenarios: str, outputs: str, fmt: str):
+    """Score temporal sequence evaluation (escalation latency, detection rates)."""
+    from psai_bench.scorer import score_sequences
+
+    with open(scenarios) as f:
+        scenario_data = json.load(f)
+    with open(outputs) as f:
+        output_data = json.load(f)
+
+    report = score_sequences(scenario_data, output_data)
+
+    if fmt == "json":
+        click.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        click.echo("=== Sequence Score Report ===")
+        click.echo(f"  Sequences:              {report.n_sequences}")
+        click.echo(f"  Threat sequences:       {report.n_threat_sequences}")
+        click.echo(f"  Benign sequences:       {report.n_benign_sequences}")
+        click.echo(f"  Early detection rate:   {report.early_detection_rate:.4f}")
+        click.echo(f"  Late detection rate:    {report.late_detection_rate:.4f}")
+        click.echo(f"  Missed sequence rate:   {report.missed_sequence_rate:.4f}")
+        click.echo(f"  False escalation rate:  {report.false_escalation_rate:.4f}")
+
+
+@main.command()
+@click.option("--metadata-results", type=click.Path(exists=True), required=True,
+              help="System outputs scored against metadata-track scenarios.")
+@click.option("--visual-results", type=click.Path(exists=True), required=True,
+              help="System outputs scored against visual-track scenarios.")
+@click.option("--metadata-scenarios", type=click.Path(exists=True), required=True,
+              help="Metadata-track scenario file (for scoring).")
+@click.option("--visual-scenarios", type=click.Path(exists=True), required=True,
+              help="Visual-track scenario file (for scoring).")
+def analyze_frame_gap(
+    metadata_results: str,
+    visual_results: str,
+    metadata_scenarios: str,
+    visual_scenarios: str,
+):
+    """Compute perception-reasoning gap between metadata and visual track performance.
+
+    Loads each results file, scores it with score_run(), then calls
+    compute_perception_gap() on the two ScoreReports.
+
+    Note: This is separate from 'analyze-gap', which does multi-model gap analysis
+    from a results directory using the old track structure.
+    """
+    from psai_bench.scorer import compute_perception_gap, score_run
+
+    with open(metadata_scenarios) as f:
+        meta_scenarios = json.load(f)
+    with open(metadata_results) as f:
+        meta_outputs = json.load(f)
+
+    with open(visual_scenarios) as f:
+        vis_scenarios = json.load(f)
+    with open(visual_results) as f:
+        vis_outputs = json.load(f)
+
+    meta_report = score_run(meta_scenarios, meta_outputs)
+    visual_report = score_run(vis_scenarios, vis_outputs)
+
+    try:
+        gap = compute_perception_gap(meta_report, visual_report)
+    except ValueError as e:
+        raise click.ClickException(str(e)) from e
+
+    sign = "+" if gap >= 0 else ""
+    click.echo("=== Perception-Reasoning Gap Analysis ===")
+    click.echo(f"  Metadata aggregate score: {meta_report.aggregate_score:.4f}  (N={meta_report.n_scenarios})")
+    click.echo(f"  Visual aggregate score:   {visual_report.aggregate_score:.4f}  (N={visual_report.n_scenarios})")
+    click.echo(f"  Gap (metadata - visual):  {sign}{gap:.4f}")
+    click.echo("")
+    if abs(gap) < 0.02:
+        click.echo("  Interpretation: Video adds negligible value (<2% gap).")
+    elif gap > 0:
+        click.echo(f"  Interpretation: Metadata context boosts aggregate by {gap:.1%} — video perception alone is insufficient.")
+    else:
+        click.echo(f"  Interpretation: Visual track outperforms metadata by {abs(gap):.1%}.")
 
 
 if __name__ == "__main__":

@@ -101,9 +101,9 @@ def validate_submission(
             if not isinstance(conf, (int, float)) or conf < 0 or conf > 1:
                 bad_confidence.append(aid)
 
-        # Reasoning length
-        reasoning = out.get("reasoning", "")
-        if len(reasoning.split()) < 20:
+        # Reasoning length (only checked when reasoning is present and non-empty)
+        reasoning = out.get("reasoning")
+        if reasoning and len(reasoning.split()) < 20:
             short_reasoning.append(aid)
 
         # Full schema validation
@@ -142,7 +142,7 @@ def validate_submission(
     if susp_frac > 0.30:
         report.warn(
             f"SUSPICIOUS fraction is {susp_frac:.1%} (>{30:.0%}). "
-            f"Aggregate score will receive penalty per Section 4.5."
+            f"High SUSPICIOUS fraction reduces Decisiveness metric."
         )
 
     return report
@@ -246,7 +246,7 @@ def validate_scenarios(scenarios: list[dict]) -> ValidationReport:
     zone_conflicts = []
     for s in scenarios:
         zone_type = s.get("zone", {}).get("type", "")
-        desc = s.get("description", "").lower()
+        desc = (s.get("description") or "").lower()
         bad_fragments = _ZONE_DESCRIPTION_CONFLICTS.get(zone_type, set())
         for frag in bad_fragments:
             if frag in desc:
@@ -288,6 +288,36 @@ def validate_scenarios(scenarios: list[dict]) -> ValidationReport:
                 f"Ground truth '{verdict}' is only {frac:.1%} of scenarios. "
                 f"Low representation may reduce statistical power for this class."
             )
+
+    # Track-specific required fields
+    track_errors = []
+    for s in scenarios:
+        track = s.get("track", "")
+        aid = s.get("alert_id", "?")
+        if track in ("visual_only", "visual_contradictory"):
+            visual_data = s.get("visual_data") or {}
+            if not visual_data.get("uri"):
+                track_errors.append(f"{aid}: track={track!r} requires visual_data.uri to be set")
+        if track == "visual_contradictory":
+            meta = s.get("_meta", {})
+            if not meta.get("contradictory"):
+                track_errors.append(f"{aid}: track='visual_contradictory' requires _meta.contradictory=True")
+            if meta.get("visual_gt_source") != "video_category":
+                track_errors.append(
+                    f"{aid}: track='visual_contradictory' requires _meta.visual_gt_source='video_category'"
+                )
+        if track == "temporal":
+            meta = s.get("_meta", {})
+            if not meta.get("sequence_id"):
+                track_errors.append(f"{aid}: track='temporal' requires _meta.sequence_id to be set")
+            if meta.get("sequence_position") is None:
+                track_errors.append(f"{aid}: track='temporal' requires _meta.sequence_position to be set")
+
+    if track_errors:
+        for err in track_errors[:5]:  # cap at 5 to avoid flooding
+            report.error(err)
+        if len(track_errors) > 5:
+            report.error(f"... and {len(track_errors) - 5} more track validation errors")
 
     # Track consistency
     tracks = set(s["track"] for s in scenarios)
