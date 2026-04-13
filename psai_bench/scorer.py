@@ -4,9 +4,13 @@ Implements all metrics defined in Section 4 of the specification:
 - Primary: TDR, FASR, ACC, Safety Score
 - Calibration: ECE, Brier Score, Overconfidence Rate
 - Secondary: SUSPICIOUS fraction, penalty, aggregate score
+- Decisiveness: fraction of THREAT|BENIGN predictions (non-SUSPICIOUS)
 - Per-difficulty breakdowns
 - Cross-dataset generalization gap
+- Ambiguous scenario partitioning (excluded from main aggregate)
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 
@@ -32,9 +36,10 @@ class ScoreReport:
 
     # Secondary
     suspicious_fraction: float = 0.0
-    suspicious_penalty: float = 0.0
-    calibration_factor: float = 0.0
+    suspicious_penalty: float = 0.0   # Zeroed out — kept for backward compat
+    calibration_factor: float = 0.0   # Zeroed out — kept for backward compat
     aggregate_score: float = 0.0
+    decisiveness: float = 0.0    # Fraction of THREAT|BENIGN predictions (not SUSPICIOUS)
 
     # Per-difficulty breakdown
     accuracy_easy: float = 0.0
@@ -56,11 +61,15 @@ class ScoreReport:
     n_threats: int = 0
     n_benign: int = 0
     n_suspicious_gt: int = 0
+    n_ambiguous: int = 0
 
     # Cost/latency (if reported)
     mean_latency_ms: float = 0.0
     p95_latency_ms: float = 0.0
     mean_cost_usd: float = 0.0
+
+    # Nested report for ambiguous partition (excluded from main aggregate)
+    ambiguous_report: ScoreReport | None = None
 
     def to_dict(self) -> dict:
         """Convert to serializable dictionary."""
@@ -70,9 +79,53 @@ class ScoreReport:
                 d[k] = float(v)
             elif isinstance(v, np.integer):
                 d[k] = int(v)
+            elif isinstance(v, ScoreReport):
+                d[k] = v.to_dict()
+            elif v is None:
+                d[k] = v
             else:
                 d[k] = v
         return d
+
+
+def format_dashboard(report: ScoreReport, ambiguous_report: ScoreReport | None = None) -> str:
+    """Format a ScoreReport as a human-readable metrics dashboard.
+
+    Uses only Python builtins. Output is grep-able by metric name.
+    No external dependencies (no tabulate, no rich).
+    """
+    lines = []
+    lines.append("=== PSAI-Bench Metrics Dashboard ===")
+    lines.append(f"  TDR (Threat Detection Rate):    {report.tdr:.4f}")
+    lines.append(f"  FASR (False Alarm Suppression): {report.fasr:.4f}")
+    lines.append(f"  Decisiveness:                   {report.decisiveness:.4f}")
+    lines.append(f"  Calibration (ECE):              {report.ece:.4f}  (lower is better)")
+    lines.append("")
+    lines.append("=== Per-Difficulty Accuracy ===")
+    lines.append(f"  Easy:   {report.accuracy_easy:.4f}")
+    lines.append(f"  Medium: {report.accuracy_medium:.4f}")
+    lines.append(f"  Hard:   {report.accuracy_hard:.4f}")
+    lines.append("")
+    lines.append("=== Aggregate Score ===")
+    lines.append("  Formula: 0.4*TDR + 0.3*FASR + 0.2*Decisiveness + 0.1*(1-ECE)")
+    lines.append(f"  Score:   {report.aggregate_score:.4f}")
+
+    # Use ambiguous_report from the report itself if not passed separately
+    amb = ambiguous_report or report.ambiguous_report
+    if amb is not None and amb.n_scenarios > 0:
+        lines.append("")
+        lines.append(f"=== Ambiguous Bucket (N={amb.n_scenarios}, excluded from aggregate) ===")
+        lines.append(f"  TDR:          {amb.tdr:.4f}")
+        lines.append(f"  FASR:         {amb.fasr:.4f}")
+        lines.append(f"  Decisiveness: {amb.decisiveness:.4f}")
+
+    lines.append("")
+    lines.append(
+        f"N={report.n_scenarios} scenarios "
+        f"(Threats={report.n_threats}, Benign={report.n_benign}, Ambiguous={report.n_ambiguous})"
+    )
+
+    return "\n".join(lines)
 
 
 def _safety_score(tdr: float, fasr: float, w_threat: float, w_false: float) -> float:
@@ -105,18 +158,18 @@ def _brier_score(confidences: np.ndarray, correct: np.ndarray) -> float:
     return float(np.mean((confidences - correct.astype(float)) ** 2))
 
 
-def score_run(
+def _score_partition(
     scenarios: list[dict],
     outputs: list[dict],
 ) -> ScoreReport:
-    """Score a single evaluation run.
+    """Score a single partition of scenarios.
 
     Args:
-        scenarios: List of PSAI-Bench alert dicts with _meta.ground_truth and _meta.difficulty.
-        outputs: List of system output dicts with verdict, confidence, processing_time_ms.
+        scenarios: List of scenario dicts with _meta.ground_truth and _meta.difficulty.
+        outputs: List of ALL system output dicts (will be filtered by alert_id).
 
     Returns:
-        ScoreReport with all metrics computed.
+        ScoreReport with all metrics computed for this partition.
     """
     # Build lookup from alert_id to output
     output_map = {o["alert_id"]: o for o in outputs}
@@ -130,13 +183,11 @@ def score_run(
     latencies = []
     costs = []
 
-    n_missing = 0
     for s in scenarios:
         aid = s["alert_id"]
         if aid not in output_map:
             # Missing responses are scored as incorrect with zero confidence.
             # A system cannot game the benchmark by skipping hard scenarios.
-            n_missing += 1
             gt_verdicts.append(s["_meta"]["ground_truth"])
             pred_verdicts.append("MISSING")  # guaranteed wrong for any ground truth
             confidences.append(0.0)
@@ -202,14 +253,21 @@ def score_run(
         overconf = (conf[wrong_mask] > 0.8).mean()
         report.overconfidence_rate = float(overconf)
 
-    # --- SUSPICIOUS fraction and penalty ---
+    # --- SUSPICIOUS fraction and Decisiveness ---
     report.suspicious_fraction = float((pred == "SUSPICIOUS").mean())
-    report.suspicious_penalty = max(0.0, (report.suspicious_fraction - 0.30) * 2)
-    report.calibration_factor = max(0.5, 1.0 - report.ece)
+
+    # Decisiveness: fraction of predictions that are THREAT or BENIGN (not SUSPICIOUS)
+    decisive_mask = (pred == "THREAT") | (pred == "BENIGN")
+    report.decisiveness = float(decisive_mask.mean()) if n > 0 else 0.0
+
+    # Aggregate: transparent additive formula (backward-compat fields zeroed out)
+    report.suspicious_penalty = 0.0
+    report.calibration_factor = 0.0
     report.aggregate_score = (
-        report.safety_score_3_1
-        * (1 - report.suspicious_penalty)
-        * report.calibration_factor
+        0.4 * report.tdr
+        + 0.3 * report.fasr
+        + 0.2 * report.decisiveness
+        + 0.1 * (1.0 - report.ece)
     )
 
     # --- Per-difficulty breakdown ---
@@ -263,6 +321,43 @@ def score_run(
     return report
 
 
+def score_run(
+    scenarios: list[dict],
+    outputs: list[dict],
+) -> ScoreReport:
+    """Score a single evaluation run.
+
+    Partitions scenarios into non-ambiguous (main metrics) and ambiguous (separate bucket).
+    Ambiguous scenarios are those where _meta.ambiguity_flag is True. Missing ambiguity_flag
+    defaults to False for backward compatibility with v1 scenarios.
+
+    Args:
+        scenarios: List of PSAI-Bench alert dicts with _meta.ground_truth and _meta.difficulty.
+        outputs: List of system output dicts with verdict, confidence, processing_time_ms.
+
+    Returns:
+        ScoreReport with all metrics computed. report.ambiguous_report holds the ambiguous
+        partition metrics (None if no ambiguous scenarios exist).
+    """
+    if not scenarios:
+        return ScoreReport()
+
+    # Partition on ambiguity_flag — always use .get() for v1 backward compat
+    non_ambiguous = [s for s in scenarios if not s["_meta"].get("ambiguity_flag", False)]
+    ambiguous = [s for s in scenarios if s["_meta"].get("ambiguity_flag", False)]
+
+    # Score the non-ambiguous partition (main metrics)
+    main_report = _score_partition(non_ambiguous, outputs)
+    main_report.n_ambiguous = len(ambiguous)
+
+    # Score ambiguous partition separately if any exist
+    if ambiguous:
+        amb_report = _score_partition(ambiguous, outputs)
+        main_report.ambiguous_report = amb_report
+
+    return main_report
+
+
 def score_multiple_runs(
     scenarios: list[dict],
     all_outputs: list[list[dict]],
@@ -278,7 +373,7 @@ def score_multiple_runs(
 
     key_metrics = [
         "accuracy", "tdr", "fasr", "safety_score_3_1", "ece",
-        "aggregate_score", "suspicious_fraction",
+        "aggregate_score", "suspicious_fraction", "decisiveness",
     ]
 
     summary = {"runs": [r.to_dict() for r in reports]}
