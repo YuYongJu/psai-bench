@@ -104,7 +104,10 @@ Plans:
   3. Solar farm scenarios contain no shoplifting or road accident categories; indoor facility scenarios contain no road accidents
   4. Scenarios flagged as "ambiguous by design" have `GT=SUSPICIOUS` and an `ambiguity_flag` field present in their `_meta` block
   5. The ground truth assignment function is deterministic: given identical context inputs, it always returns the same label
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 06-01-PLAN.md — Add shared description pools, assign_ground_truth_v2 function, and expand site blocklist in distributions.py
+- [ ] 06-02-PLAN.md — Wire v2 generation path into MetadataGenerator, add adversarial injection, schema _meta_v2, CLI --version flag, version bump to 2.0.0
 
 ### Phase 7: Testing and Verification
 **Goal**: Automated tests confirm that leakage is eliminated across all fields, the decision rubric produces expected labels for known configurations, ambiguous scenario metadata is correct, and default parameters still reproduce v1.0-compatible output
@@ -163,7 +166,7 @@ Phases execute strictly in numeric order: 6 → 7 → 8 → 9 → 10
 | 3. Test Coverage Expansion | v1.0 | ?/? | Complete | 2026-04-13 |
 | 4. GitHub Actions CI | v1.0 | ?/? | Complete | 2026-04-13 |
 | 5. Documentation + Release | v1.0 | ?/? | Complete | 2026-04-13 |
-| 6. Scenario Generation Rebuild | v2.0 | 0/? | Not started | - |
+| 6. Scenario Generation Rebuild | v2.0 | 0/2 | Not started | - |
 | 7. Testing and Verification | v2.0 | 0/? | Not started | - |
 | 8. Decision Rubric Documentation | v2.0 | 0/? | Not started | - |
 | 9. Scoring and Schema Updates | v2.0 | 0/? | Not started | - |
