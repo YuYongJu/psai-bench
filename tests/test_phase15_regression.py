@@ -14,14 +14,10 @@ import pytest
 
 from psai_bench.scorer import (
     ScoreReport,
-    SequenceScoreReport,
     compute_perception_gap,
     score_run,
-    score_sequences,
-    format_dashboard,
-    partition_by_track,
 )
-from psai_bench.generators import MetadataGenerator, VisualOnlyGenerator, TemporalSequenceGenerator
+from psai_bench.generators import MetadataGenerator, VisualOnlyGenerator
 from psai_bench.validation import validate_scenarios
 
 

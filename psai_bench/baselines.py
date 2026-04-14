@@ -6,7 +6,7 @@ Results from these baselines populate Section 7.2 of the specification.
 
 import numpy as np
 
-from psai_bench.schema import DISPATCH_ACTIONS, VERDICTS
+from psai_bench.schema import VERDICTS
 
 # Default dispatch action for each verdict class (per CONTEXT.md Phase 19 decision).
 # Derived from predicted verdict, not ground truth.

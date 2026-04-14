@@ -9,7 +9,7 @@ something that was supposed to be valid is now rejected, or vice versa.
 import pytest
 from jsonschema import ValidationError
 
-from psai_bench.schema import ALERT_SCHEMA, _META_SCHEMA_V2, validate_alert
+from psai_bench.schema import _META_SCHEMA_V2, validate_alert
 from psai_bench.validation import validate_scenarios
 
 
@@ -252,6 +252,6 @@ class TestTrackAwareValidation:
         s["description"] = None  # explicitly None, not absent
         # This would raise AttributeError if the None-safe fix was not applied
         try:
-            report = validate_scenarios([s])
+            validate_scenarios([s])
         except AttributeError as e:
             pytest.fail(f"validate_scenarios raised AttributeError on description=None: {e}")

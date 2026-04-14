@@ -857,7 +857,7 @@ class ContradictoryGenerator:
                 continue
 
             # Build remaining fields
-            zone_name = self.rng.choice(list(UCF_CATEGORY_MAP.keys()))  # placeholder draw consumed
+            self.rng.choice(list(UCF_CATEGORY_MAP.keys()))  # placeholder draw consumed
             zone = {
                 "id": f"zone-{self.rng.randint(100, 999)}",
                 "name": self.rng.choice(

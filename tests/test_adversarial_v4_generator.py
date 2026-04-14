@@ -6,7 +6,6 @@ AdversarialV4Generator is appended to generators.py.
 
 import json
 
-import pytest
 
 
 def test_adversarial_v4_generator_importable():

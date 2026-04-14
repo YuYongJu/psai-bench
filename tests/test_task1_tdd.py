@@ -6,9 +6,9 @@ remain as a record of the TDD process. They should all pass after
 implementation.
 """
 import pytest
-from jsonschema import ValidationError, validate
+from jsonschema import validate
 
-from psai_bench.schema import ALERT_SCHEMA, _META_SCHEMA_V2, validate_alert
+from psai_bench.schema import _META_SCHEMA_V2, validate_alert
 
 
 def _base_scenario():
@@ -95,7 +95,7 @@ class TestTask1TDD:
         s = _base_scenario()
         s["description"] = None  # explicitly None
         try:
-            report = validate_scenarios([s])
+            validate_scenarios([s])
         except AttributeError as e:
             pytest.fail(f"validate_scenarios raised AttributeError on description=None: {e}")
 

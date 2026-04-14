@@ -3,14 +3,12 @@
 Task 1 tests (1-13): CostModel, DISPATCH_COSTS, compute_optimal_dispatch()
 Task 2 tests (14-21): score_dispatch() with 3-assumption sensitivity analysis
 """
-import copy
 import pytest
 
 from psai_bench.cost_model import (
     CostModel,
     CostScoreReport,
     DISPATCH_COSTS,
-    SITE_THREAT_MULTIPLIERS,
     compute_optimal_dispatch,
     score_dispatch,
 )

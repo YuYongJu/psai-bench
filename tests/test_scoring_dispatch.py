@@ -5,7 +5,7 @@ Task 2 tests: format_dashboard() backward compat + cost section rendering.
 """
 import pytest
 
-from psai_bench.cost_model import CostModel, CostScoreReport, score_dispatch
+from psai_bench.cost_model import CostScoreReport
 from psai_bench.scorer import format_dashboard, score_run
 
 

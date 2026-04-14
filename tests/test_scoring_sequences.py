@@ -4,7 +4,6 @@ Covers early/late/missed detection rates, false escalation rate,
 mixed-file behavior, and empty input edge cases.
 """
 
-import pytest
 
 from psai_bench.scorer import SequenceScoreReport, score_sequences
 

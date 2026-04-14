@@ -8,7 +8,6 @@ Tests cover all 5 behaviors specified in the plan:
 5. score_run is NOT called (function computes accuracy directly)
 """
 
-import pytest
 
 from psai_bench.scorer import compute_site_generalization_gap
 

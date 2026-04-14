@@ -15,7 +15,6 @@ Pinned: 2026-04-13 (Phase 11 Schema v3)
 import hashlib
 import json
 
-import pytest
 
 from psai_bench.generators import MetadataGenerator
 

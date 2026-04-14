@@ -6,7 +6,6 @@ timestamp monotonicity, escalation-point variation, and RNG isolation.
 
 from collections import defaultdict
 
-import pytest
 
 from psai_bench.generators import TemporalSequenceGenerator
 
