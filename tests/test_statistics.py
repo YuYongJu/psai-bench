@@ -11,7 +11,6 @@ from psai_bench.statistics import (
     bootstrap_ci,
     check_run_consistency,
     compute_all_cis,
-    mcnemar_test,
     proportion_ci,
 )
 
