@@ -20,11 +20,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Security",
 ]
-
-[project.urls]
-Homepage = "https://github.com/YuYongJu/psai-bench"
-Repository = "https://github.com/YuYongJu/psai-bench"
-Issues = "https://github.com/YuYongJu/psai-bench/issues"
 dependencies = [
     "numpy>=1.24",
     "pandas>=2.0",
@@ -34,6 +29,11 @@ dependencies = [
     "tabulate>=0.9",
     "matplotlib>=3.7",
 ]
+
+[project.urls]
+Homepage = "https://github.com/YuYongJu/psai-bench"
+Repository = "https://github.com/YuYongJu/psai-bench"
+Issues = "https://github.com/YuYongJu/psai-bench/issues"
 
 [project.optional-dependencies]
 dev = [
