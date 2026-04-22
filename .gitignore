@@ -14,6 +14,11 @@ data/raw/
 .vscode/
 .idea/
 
+# AI coding assistants (local config, should not be committed)
+.claude/
+.cursor/
+.aider*
+
 # Generated benchmark data (regenerated via CLI — do not commit)
 data/generated/
 
